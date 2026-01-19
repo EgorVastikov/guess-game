@@ -1,0 +1,539 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Угадай предмет/животное</title>
+    <style>
+      :root {
+        --bg: #0b1220;
+        --card: #111a2e;
+        --text: #eaf0ff;
+        --muted: #b9c6ea;
+        --accent: #6aa8ff;
+        --good: #39d98a;
+        --bad: #ff6b6b;
+        --warn: #ffd166;
+      }
+
+      * { box-sizing: border-box; }
+
+      body {
+        margin: 0;
+        font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+        background: radial-gradient(1200px 700px at 20% 0%, #172448 0%, var(--bg) 55%);
+        color: var(--text);
+      }
+
+      .wrap {
+        max-width: 860px;
+        margin: 0 auto;
+        padding: 16px;
+      }
+
+      .title {
+        font-size: 28px;
+        font-weight: 800;
+        letter-spacing: 0.2px;
+        margin: 6px 0 14px;
+      }
+
+      .card {
+        background: rgba(17, 26, 46, 0.85);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 16px;
+        padding: 14px;
+        box-shadow: 0 20px 50px rgba(0, 0, 0, 0.35);
+      }
+
+      .row {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 12px;
+      }
+
+      .big {
+        font-size: 18px;
+        line-height: 1.25;
+      }
+
+      .btn {
+        display: inline-flex;
+        justify-content: center;
+        align-items: center;
+        gap: 10px;
+        border: 0;
+        border-radius: 14px;
+        padding: 14px 16px;
+        font-weight: 800;
+        font-size: 18px;
+        cursor: pointer;
+        background: var(--accent);
+        color: #061022;
+        width: 100%;
+      }
+
+      .btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+
+      .btn.secondary {
+        background: rgba(255, 255, 255, 0.12);
+        color: var(--text);
+        border: 1px solid rgba(255, 255, 255, 0.14);
+      }
+
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 10px 12px;
+        border-radius: 999px;
+        border: 1px solid rgba(255, 255, 255, 0.16);
+        background: rgba(255, 255, 255, 0.08);
+        color: var(--text);
+        font-weight: 700;
+        font-size: 16px;
+        cursor: pointer;
+        user-select: none;
+      }
+
+      .chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+      }
+
+      textarea {
+        width: 100%;
+        min-height: 72px;
+        max-height: 140px;
+        resize: vertical;
+        border-radius: 14px;
+        border: 1px solid rgba(255, 255, 255, 0.14);
+        background: rgba(255, 255, 255, 0.06);
+        color: var(--text);
+        padding: 12px 12px;
+        font-size: 18px;
+        outline: none;
+      }
+
+      .meta {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        flex-wrap: wrap;
+      }
+
+      .label {
+        font-size: 18px;
+        font-weight: 800;
+      }
+
+      .answer {
+        font-size: 22px;
+        font-weight: 900;
+        padding: 10px 12px;
+        border-radius: 14px;
+        background: rgba(255, 255, 255, 0.08);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+      }
+
+      .answer.yes { color: var(--good); }
+      .answer.no { color: var(--bad); }
+      .answer.unknown { color: var(--warn); }
+
+      .history {
+        display: grid;
+        gap: 10px;
+        margin-top: 6px;
+      }
+
+      .hitem {
+        border: 1px solid rgba(255, 255, 255, 0.10);
+        background: rgba(0, 0, 0, 0.18);
+        border-radius: 14px;
+        padding: 10px 12px;
+      }
+
+      .hq { color: var(--muted); font-weight: 700; }
+      .ha { font-weight: 900; font-size: 18px; margin-top: 4px; }
+
+      .result {
+        margin-top: 10px;
+        padding: 12px;
+        border-radius: 14px;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        background: rgba(255, 255, 255, 0.06);
+        font-size: 20px;
+        font-weight: 900;
+      }
+
+      .finalTitle {
+        margin-top: 10px;
+        padding: 14px 12px;
+        border-radius: 16px;
+        border: 1px solid rgba(255, 255, 255, 0.14);
+        background: rgba(255, 255, 255, 0.08);
+        font-size: 28px;
+        font-weight: 1000;
+        text-align: center;
+      }
+
+      .finalTitle.win { color: var(--good); }
+      .finalTitle.lose { color: var(--warn); }
+
+      details.examples {
+        border: 1px solid rgba(255, 255, 255, 0.14);
+        background: rgba(255, 255, 255, 0.06);
+        border-radius: 14px;
+        padding: 10px 12px;
+      }
+
+      details.examples summary {
+        cursor: pointer;
+        font-weight: 900;
+        font-size: 18px;
+        list-style: none;
+      }
+
+      details.examples summary::-webkit-details-marker { display: none; }
+
+      .exampleList {
+        margin: 10px 0 0;
+        padding: 0 0 0 18px;
+        color: var(--muted);
+        font-size: 16px;
+        font-weight: 700;
+      }
+
+      .muted { color: var(--muted); }
+
+      @media (min-width: 740px) {
+        .row { grid-template-columns: 1fr 1fr; }
+        .btn { width: auto; }
+        .actions { display: flex; gap: 12px; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="title">Угадай предмет/животное</div>
+
+      <div class="card">
+        <div class="meta">
+          <div class="label">Осталось вопросов: <span id="left">10</span></div>
+          <div class="actions">
+            <button class="btn" id="newGameBtn">Новая игра</button>
+          </div>
+        </div>
+
+        <div style="height: 12px"></div>
+
+        <div class="row">
+          <div>
+            <div class="label">Твой вопрос</div>
+            <div style="height: 8px"></div>
+            <textarea id="question" placeholder="Например: Это живое?"></textarea>
+
+            <div style="height: 10px"></div>
+            <details class="examples" id="examples">
+              <summary>Примеры вопросов</summary>
+              <ul class="exampleList">
+                <li>Это живое?</li>
+                <li>Это бывает дома?</li>
+                <li>Это школьная вещь?</li>
+                <li>Это можно держать в руке?</li>
+                <li>Это больше кошки?</li>
+                <li>Это можно есть?</li>
+                <li>Это из дерева?</li>
+                <li>Это умеет летать?</li>
+              </ul>
+            </details>
+
+            <div style="height: 10px"></div>
+            <div class="chips" id="chips"></div>
+
+            <div style="height: 12px"></div>
+            <button class="btn secondary" id="askBtn" disabled>Спросить</button>
+            <div style="height: 8px"></div>
+            <div class="muted" id="status"></div>
+          </div>
+
+          <div>
+            <div class="label">Ответ:</div>
+            <div style="height: 8px"></div>
+            <div class="answer unknown" id="answer">не знаю</div>
+
+            <div id="finalTitle" class="finalTitle" style="display:none"></div>
+            <div id="result" class="result" style="display:none"></div>
+
+            <div style="height: 14px"></div>
+            <div class="label">История</div>
+            <div class="history" id="history"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const $ = (id) => document.getElementById(id);
+
+      const chips = [
+        "Это живое?",
+        "Это бывает дома?",
+        "Это больше кошки?",
+        "Это можно держать в руке?",
+        "Это школьная вещь?",
+      ];
+
+      let gameId = null;
+      let left = 10;
+      let over = false;
+      let history = [];
+      let isBusy = false;
+
+      const NEW_GAME_TEXT = "Новая игра";
+      const ASK_TEXT = "Спросить";
+
+      function setStatus(text) {
+        $("status").textContent = text || "";
+      }
+
+      function setAnswer(text) {
+        const el = $("answer");
+        el.textContent = text;
+        el.classList.remove("yes", "no", "unknown");
+        if (text === "да") el.classList.add("yes");
+        else if (text === "нет") el.classList.add("no");
+        else el.classList.add("unknown");
+      }
+
+      function setLeft(value) {
+        left = Number(value ?? 10);
+        $("left").textContent = String(left);
+      }
+
+      function renderHistory(items) {
+        const root = $("history");
+        root.innerHTML = "";
+        (items || []).slice().reverse().forEach((h) => {
+          const div = document.createElement("div");
+          div.className = "hitem";
+          div.innerHTML = `
+            <div class="hq">${escapeHtml(h.q)}</div>
+            <div class="ha">${escapeHtml(h.a)}</div>
+          `;
+          root.appendChild(div);
+        });
+      }
+
+      function setResult(over, win, secret) {
+        const title = $("finalTitle");
+        const el = $("result");
+        if (!over) {
+          title.style.display = "none";
+          title.textContent = "";
+          title.classList.remove("win", "lose");
+          el.style.display = "none";
+          el.textContent = "";
+          return;
+        }
+
+        title.style.display = "block";
+        title.classList.remove("win", "lose");
+        el.style.display = "block";
+        if (win) {
+          title.textContent = "Победа!";
+          title.classList.add("win");
+          el.textContent = `Было загадано: ${secret}`;
+        } else {
+          title.textContent = "Игра окончена";
+          title.classList.add("lose");
+          el.textContent = `Было загадано: ${secret}`;
+        }
+      }
+
+      function updateAskEnabled() {
+        const hasQuestion = $("question").value.trim().length > 0;
+        $("askBtn").disabled = isBusy || !gameId || !hasQuestion || over;
+        $("newGameBtn").disabled = isBusy;
+      }
+
+      function setBusy(value, label) {
+        isBusy = Boolean(value);
+        if (isBusy) {
+          if (label === "new") {
+            $("newGameBtn").textContent = "Начинаю...";
+          } else {
+            $("askBtn").textContent = "Думаю...";
+          }
+        } else {
+          $("newGameBtn").textContent = NEW_GAME_TEXT;
+          $("askBtn").textContent = ASK_TEXT;
+        }
+        updateAskEnabled();
+      }
+
+      function isNetworkError(err) {
+        const msg = String(err?.message || "");
+        if (err instanceof TypeError) return true;
+        return /failed to fetch|networkerror|load failed|fetch/i.test(msg);
+      }
+
+      async function apiPost(path, body, timeoutMs = 8000) {
+        const ctrl = new AbortController();
+        const t = setTimeout(() => ctrl.abort(), timeoutMs);
+
+        try {
+          const res = await fetch(path, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body || {}),
+            signal: ctrl.signal,
+          });
+
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) {
+            const msg = data?.message || "Сервис занят, попробуй ещё раз";
+            const e = new Error(msg);
+            e.status = res.status;
+            throw e;
+          }
+          return data;
+        } finally {
+          clearTimeout(t);
+        }
+      }
+
+      async function startGame() {
+        setStatus("Начинаю игру...");
+        setBusy(true, "new");
+
+        try {
+          const data = await apiPost("/api/new", {});
+
+          gameId = data.gameId;
+          over = false;
+          history = Array.isArray(data.history) ? data.history : [];
+
+          setLeft(data.left);
+          setAnswer("не знаю");
+          setResult(false, false, null);
+          renderHistory(history);
+          $("question").value = "";
+
+          setStatus(data.message || "Игра началась. Задай вопрос!");
+        } catch (e) {
+          gameId = null;
+          over = false;
+          history = [];
+          renderHistory(history);
+          setAnswer("не знаю");
+          setResult(false, false, null);
+          setLeft(10);
+
+          if (e?.name === "AbortError") {
+            setStatus("Слишком долго. Попробуй ещё раз");
+          } else if (isNetworkError(e)) {
+            setStatus("Нет интернета");
+          } else {
+            setStatus("Сервис занят, попробуй ещё раз");
+          }
+        } finally {
+          setBusy(false);
+          $("question").focus();
+        }
+      }
+
+      async function askQuestion(question) {
+        return apiPost("/api/ask", { gameId, question });
+      }
+
+      async function onAskClick() {
+        const question = $("question").value.trim();
+        if (!question) return;
+        if (!gameId) {
+          setStatus("Нажми 'Новая игра'");
+          updateAskEnabled();
+          return;
+        }
+
+        setStatus("Думаю...");
+        setBusy(true, "ask");
+
+        try {
+          const data = await askQuestion(question);
+          setAnswer(data.answer);
+          setLeft(data.left);
+
+          history = data.history || [];
+          renderHistory(history);
+
+          over = Boolean(data.over);
+          if (over) {
+            setResult(true, Boolean(data.win), data.secret);
+          } else {
+            setResult(false, false, null);
+          }
+
+          setStatus(data.message || "");
+        } catch (e) {
+          if (e?.name === "AbortError") {
+            setStatus("Слишком долго. Попробуй ещё раз");
+          } else if (isNetworkError(e)) {
+            setStatus("Нет интернета");
+          } else {
+            setStatus("Сервис занят, попробуй ещё раз");
+          }
+          setAnswer("не знаю");
+        }
+
+        $("question").focus();
+        setBusy(false);
+      }
+
+      function escapeHtml(s) {
+        return String(s)
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll('"', "&quot;")
+          .replaceAll("'", "&#039;");
+      }
+
+      function initChips() {
+        const root = $("chips");
+        chips.forEach((text) => {
+          const b = document.createElement("button");
+          b.type = "button";
+          b.className = "pill";
+          b.textContent = text;
+          b.addEventListener("click", () => {
+            $("question").value = text;
+            const q = $("question");
+            updateAskEnabled();
+            q.focus();
+            try { q.setSelectionRange(q.value.length, q.value.length); } catch {}
+          });
+          root.appendChild(b);
+        });
+      }
+
+      $("newGameBtn").addEventListener("click", startGame);
+      $("askBtn").addEventListener("click", onAskClick);
+      $("question").addEventListener("input", updateAskEnabled);
+      $("question").addEventListener("keydown", (e) => {
+        if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+          onAskClick();
+        }
+      });
+
+      initChips();
+      setStatus("Нажми 'Новая игра'");
+      updateAskEnabled();
+    </script>
+  </body>
+</html>

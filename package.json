@@ -1,0 +1,14 @@
+{
+  "name": "guess-game",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Kid-friendly guess game (static UI + API) with OpenRouter LLM",
+  "main": "dev-local.js",
+  "type": "commonjs",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "start": "node dev-local.js"
+  }
+}

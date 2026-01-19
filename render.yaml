@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: guess-game
+    env: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /
+    envVars:
+      - key: NODE_VERSION
+        value: 20
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: MODEL
+        value: meta-llama/llama-3.3-8b-instruct:free
+      - key: OPENROUTER_BASE_URL
+        value: https://openrouter.ai/api/v1
+      - key: STORE_KIND
+        value: upstash
+      - key: UPSTASH_REDIS_REST_URL
+        sync: false
+      - key: UPSTASH_REDIS_REST_TOKEN
+        sync: false
