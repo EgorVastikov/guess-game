@@ -51,7 +51,7 @@ const SECRETS = [
   "телефон",
 ];
 
-const ANIMALS = new Set([
+const ANIMALS = makeSet([
   "кошка",
   "собака",
   "заяц",
@@ -78,7 +78,7 @@ const ANIMALS = new Set([
   "голубь",
 ]);
 
-const BIRDS = new Set([
+const BIRDS = makeSet([
   "курица",
   "петух",
   "утка",
@@ -88,11 +88,11 @@ const BIRDS = new Set([
   "голубь",
 ]);
 
-const FISH = new Set(["рыба"]);
+const FISH = makeSet(["рыба"]);
 
-const SWIMS = new Set(["рыба", "утка", "гусь", "лягушка", "черепаха"]);
+const SWIMS = makeSet(["рыба", "утка", "гусь", "лягушка", "черепаха"]);
 
-const BIGGER_THAN_CAT = new Set([
+const BIGGER_THAN_CAT = makeSet([
   "лошадь",
   "корова",
   "медведь",
@@ -104,7 +104,7 @@ const BIGGER_THAN_CAT = new Set([
   "окно",
 ]);
 
-const AT_HOME = new Set([
+const AT_HOME = makeSet([
   "кошка",
   "собака",
   "попугай",
@@ -130,7 +130,7 @@ const AT_HOME = new Set([
   "машинка",
 ]);
 
-const HANDHELD = new Set([
+const HANDHELD = makeSet([
   "ложка",
   "вилка",
   "чашка",
@@ -148,7 +148,7 @@ const HANDHELD = new Set([
   "телефон",
 ]);
 
-const SCHOOL_ITEM = new Set([
+const SCHOOL_ITEM = makeSet([
   "книга",
   "тетрадь",
   "пенал",
@@ -158,7 +158,11 @@ const SCHOOL_ITEM = new Set([
   "рюкзак",
 ]);
 
-const TOYS = new Set(["мяч", "кукла", "машинка"]);
+const TOYS = makeSet(["мяч", "кукла", "машинка"]);
+
+function makeSet(items) {
+  return new Set((items || []).map(normalize));
+}
 
 function nowMs() {
   return Date.now();
