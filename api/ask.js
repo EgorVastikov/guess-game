@@ -2,7 +2,6 @@ const {
   getGame,
   saveGame,
   normalize,
-  isGuess,
   nowMs,
   getSecretFeatures,
   safeAnswer,
@@ -44,16 +43,15 @@ async function llmAnswerOpenRouter({ secret, question, history }) {
 
   const sys =
     "Ты ведущий детской игры \'Угадай предмет/животное\'. " +
-    "У тебя есть секретное слово, но НИКОГДА не называй его. " +
-    "Отвечай на любой вопрос ребёнка строго одним вариантом: \'да\', \'нет\' или \'не знаю\'. " +
-    "Без объяснений, без знаков препинания, без дополнительных слов. " +
-    "Если вопрос просит назвать секрет, подсказать слово, или просит перечислить варианты — отвечай \'не знаю\'. " +
+    `Секретное слово (НИКОГДА не раскрывай): ${String(secret)}. ` +
+    "Отвечай строго одним вариантом: \'да\', \'нет\' или \'не знаю\'. " +
+    "Никаких объяснений и дополнительных слов. " +
+    "Если вопрос просит назвать секрет, подсказать слово, или перечислить варианты — отвечай \'не знаю\'. " +
+    "Если вопрос про сравнение размеров с конкретной вещью (\'больше кровати\', \'меньше стула\') — отвечай \'не знаю\'. " +
     "Старайся быть логически последовательным с предыдущими ответами из истории. " +
     "Если вопрос некорректный, двусмысленный или ты не уверен — отвечай \'не знаю\'.";
 
-  const user =
-    `Секретное слово: ${String(secret)}\n` +
-    `Вопрос: ${String(question)}${formatHistoryForPrompt(history)}`;
+  const user = `Вопрос: ${String(question)}${formatHistoryForPrompt(history)}`;
 
   const controller = new AbortController();
   const t = setTimeout(() => controller.abort(), 9000);
@@ -67,7 +65,7 @@ async function llmAnswerOpenRouter({ secret, question, history }) {
       },
       body: JSON.stringify({
         model: openRouterModel(),
-        temperature: 0.2,
+        temperature: 0.0,
         max_tokens: 12,
         messages: [
           { role: "system", content: sys },
@@ -116,6 +114,10 @@ function detectIntent(questionNorm) {
     return { type: "alwaysUnknown", key: "color" };
   }
 
+  if ((q.includes("больше") || q.includes("меньше")) && !q.includes("кошк")) {
+    return { type: "alwaysUnknown", key: "relativeSize" };
+  }
+
   if (q.includes("жив")) return { type: "predicate", key: "living" };
   if (q.includes("вещ") || q.includes("предмет")) return { type: "predicate", key: "thing" };
   if (q.includes("птиц")) return { type: "predicate", key: "isBird" };
@@ -138,15 +140,55 @@ function detectIntent(questionNorm) {
   return null;
 }
 
-function isGuessAttempt(questionNorm) {
-  const q = String(questionNorm || "").trim();
-  if (!q.startsWith("это ")) return false;
+function extractGuessCandidate(questionNorm) {
+  const q = normalize(questionNorm);
 
+  if (detectIntent(q)) return null;
 
-  if (detectIntent(q)) return false;
+  let rest = q;
+  if (rest.startsWith("это ")) rest = rest.slice(4).trim();
+  if (!rest) return null;
 
-  const words = q.split(" ").filter(Boolean);
-  return words.length >= 2 && words.length <= 4;
+  const blockers = [
+    "больше",
+    "меньше",
+    "жив",
+    "вещ",
+    "предмет",
+    "птиц",
+    "рыб",
+    "крыл",
+    "клюв",
+    "пер",
+    "ног",
+    "лап",
+    "дома",
+    "дом",
+    "школ",
+    "держ",
+    "рук",
+    "лет",
+    "плав",
+    "двиг",
+    "потрог",
+    "трог",
+    "пощуп",
+    "цвет",
+    "природ",
+  ];
+  for (const b of blockers) {
+    if (rest.includes(b)) return null;
+  }
+
+  const words = rest.split(" ").filter(Boolean);
+  if (words.length < 1 || words.length > 3) return null;
+  return rest;
+}
+
+function isExactGuess(questionNorm, secretNorm) {
+  const cand = extractGuessCandidate(questionNorm);
+  if (!cand) return false;
+  return normalize(cand) === normalize(secretNorm);
 }
 
 function answerFromFeatures(secret, questionNorm) {
@@ -232,8 +274,9 @@ module.exports = async function handler(req, res) {
 
     const qNorm = normalize(question);
     const sNorm = normalize(game.secret);
-    const guessAttempt = isGuessAttempt(qNorm);
-    const correctGuess = isGuess(qNorm, sNorm);
+    const guessCandidate = extractGuessCandidate(qNorm);
+    const guessAttempt = Boolean(guessCandidate);
+    const correctGuess = isExactGuess(qNorm, sNorm);
 
     let answer = "не знаю";
     let message = "";
