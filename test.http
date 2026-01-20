@@ -1,0 +1,114 @@
+### guess-game manual API checks (VS Code REST Client)
+### Требуется расширение: "REST Client" (Humao)
+
+### Если dev-local.js пишет, что запустился на 3001 — поменяй baseUrl на 3001.
+@baseUrl = http://localhost:3000
+@contentType = application/json
+
+### 1) POST /api/new
+# @name newGame
+POST {{baseUrl}}/api/new
+
+###
+
+### 2) POST /api/ask (повторить 10 раз)
+# Подставляет gameId из ответа newGame
+
+POST {{baseUrl}}/api/ask
+Content-Type: {{contentType}}
+
+{
+  "gameId": "{{newGame.response.body.gameId}}",
+  "question": "Это живое?"
+}
+
+###
+
+POST {{baseUrl}}/api/ask
+Content-Type: {{contentType}}
+
+{
+  "gameId": "{{newGame.response.body.gameId}}",
+  "question": "Это бывает дома?"
+}
+
+###
+
+POST {{baseUrl}}/api/ask
+Content-Type: {{contentType}}
+
+{
+  "gameId": "{{newGame.response.body.gameId}}",
+  "question": "Это можно держать в руке?"
+}
+
+###
+
+POST {{baseUrl}}/api/ask
+Content-Type: {{contentType}}
+
+{
+  "gameId": "{{newGame.response.body.gameId}}",
+  "question": "Это школьная вещь?"
+}
+
+###
+
+POST {{baseUrl}}/api/ask
+Content-Type: {{contentType}}
+
+{
+  "gameId": "{{newGame.response.body.gameId}}",
+  "question": "Это больше кошки?"
+}
+
+###
+
+POST {{baseUrl}}/api/ask
+Content-Type: {{contentType}}
+
+{
+  "gameId": "{{newGame.response.body.gameId}}",
+  "question": "Это из дерева?"
+}
+
+###
+
+POST {{baseUrl}}/api/ask
+Content-Type: {{contentType}}
+
+{
+  "gameId": "{{newGame.response.body.gameId}}",
+  "question": "Это круглое?"
+}
+
+###
+
+POST {{baseUrl}}/api/ask
+Content-Type: {{contentType}}
+
+{
+  "gameId": "{{newGame.response.body.gameId}}",
+  "question": "Это можно съесть?"
+}
+
+###
+
+POST {{baseUrl}}/api/ask
+Content-Type: {{contentType}}
+
+{
+  "gameId": "{{newGame.response.body.gameId}}",
+  "question": "Это умеет летать?"
+}
+
+###
+
+# 10-й вопрос: ожидается over=true и secret != null (если не завершили раньше победой)
+POST {{baseUrl}}/api/ask
+Content-Type: {{contentType}}
+
+{
+  "gameId": "{{newGame.response.body.gameId}}",
+  "question": "Это большое?"
+}
