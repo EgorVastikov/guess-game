@@ -1,5 +1,21 @@
 const DEFAULT_LEFT = 10;
 
+const HARD_SECRETS = makeSet([
+  "ёж",
+  "белка",
+  "попугай",
+  "воробей",
+  "голубь",
+  "черепаха",
+  "лягушка",
+  "тетрадь",
+  "пенал",
+  "линейка",
+  "зонт",
+  "диван",
+  "кресло",
+]);
+
 const SECRETS = [
   "кошка",
   "собака",
@@ -51,6 +67,21 @@ const SECRETS = [
   "телефон",
 ];
 
+function isHard(secret) {
+  return HARD_SECRETS.has(normalize(secret));
+}
+
+function getCategoryHint(secret) {
+  const s = normalize(secret);
+  if (SCHOOL_ITEM.has(s)) return "это школьная вещь";
+  if (TOYS.has(s)) return "это игрушка";
+  if (BIRDS.has(s)) return "это птица";
+  if (FISH.has(s)) return "это водный житель";
+  if (ANIMALS.has(s)) return "это животное";
+  if (AT_HOME.has(s)) return "это бывает дома";
+  return "это какой-то предмет";
+}
+
 const ANIMALS = makeSet([
   "кошка",
   "собака",
@@ -92,14 +123,47 @@ const FISH = makeSet(["рыба"]);
 
 const SWIMS = makeSet(["рыба", "утка", "гусь", "лягушка", "черепаха"]);
 
+const FOREST = makeSet([
+  "заяц",
+  "лиса",
+  "волк",
+  "медведь",
+  "ёж",
+  "белка",
+]);
+
+const FARM = makeSet([
+  "лошадь",
+  "корова",
+  "коза",
+  "овца",
+  "свинья",
+  "курица",
+  "петух",
+  "утка",
+  "гусь",
+]);
+
+const CAN_FLY = makeSet([
+  "утка",
+  "гусь",
+  "попугай",
+  "воробей",
+  "голубь",
+]);
+
 const BIGGER_THAN_CAT = makeSet([
   "лошадь",
   "корова",
+  "коза",
+  "овца",
+  "свинья",
   "медведь",
   "волк",
   "диван",
   "кровать",
   "стол",
+  "стул",
   "дверь",
   "окно",
 ]);
@@ -124,6 +188,12 @@ const AT_HOME = makeSet([
   "бутылка",
   "зонт",
   "книга",
+  "тетрадь",
+  "пенал",
+  "карандаш",
+  "ручка",
+  "линейка",
+  "рюкзак",
   "телефон",
   "мяч",
   "кукла",
@@ -133,6 +203,7 @@ const AT_HOME = makeSet([
 const HANDHELD = makeSet([
   "ложка",
   "вилка",
+  "тарелка",
   "чашка",
   "бутылка",
   "зонт",
@@ -263,7 +334,7 @@ function getSecretFeatures(secret) {
   const isFish = FISH.has(s);
   const thing = !living;
 
-  const canMove = living;
+  const canMove =CAN_FLY.has(s)g;
   const canFly = isBird;
   const canSwim = SWIMS.has(s);
 
@@ -286,17 +357,24 @@ function getSecretFeatures(secret) {
     atHome: AT_HOME.has(s),
     biggerThanCat: BIGGER_THAN_CAT.has(s),
     handheld: HANDHELD.has(s),
-    schoolItem: SCHOOL_ITEM.has(s),
-    canMove,
-    canFly,
-    canSwim,
-    toy: TOYS.has(s),
-    natureRelated: living,
-    canTouch,
+  
+  const hard = isHard(secret);
+  const left = hard ? 15 : 10;
+  
+  const game = {
+    gameId,
+    secret,
+    left,
+    over: false,
+    win: false,
+    history: [],
+    createdAt: nowMs(),
+    lastAskAt: 0,
+    isHard: hard,
   };
-}
 
-async function createGame(env) {
+  await saveGame(env, gameId, game);
+  return { gameId, left, isHard: hard
   const gameId = randomId();
   const secret = pickSecret();
   const game = {
@@ -352,6 +430,8 @@ export {
   safeAnswer,
   isGuess,
   pickSecret,
+  isHard,
+  getCategoryHint,
   getSecretFeatures,
   createGame,
   getGame,

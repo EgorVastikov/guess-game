@@ -6,6 +6,8 @@ import {
   getSecretFeatures,
   safeAnswer,
   DEFAULT_LEFT,
+  isHard,
+  getCategoryHint,
 } from "../_store.js";
 
 function json(obj, status = 200) {
@@ -124,6 +126,8 @@ function detectIntent(questionNorm) {
     return { type: "alwaysUnknown", key: "relativeSize" };
   }
 
+  if (q.includes("лес")) return { type: "predicate", key: "livesInForest" };
+  if (q.includes("ферм")) return { type: "predicate", key: "livesOnFarm" };
   if (q.includes("жив")) return { type: "predicate", key: "living" };
   if (q.includes("вещ") || q.includes("предмет")) return { type: "predicate", key: "thing" };
   if (q.includes("птиц")) return { type: "predicate", key: "isBird" };
@@ -321,6 +325,11 @@ export async function onRequestPost(context) {
       game.over = true;
       game.win = false;
       message = "Вопросы закончились";
+    }
+    
+    if (!game.over && !game.win && game.left <= 3 && isHard(game.secret)) {
+       const hint = getCategoryHint(game.secret);
+       message = `Осталось мало вопросов! Подсказка: ${hint}`;
     }
 
     await saveGame(env, gameId, game);
