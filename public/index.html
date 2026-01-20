@@ -96,6 +96,53 @@
         text-transform: uppercase;
         letter-spacing: 0.5px;
       }
+      
+      .btn.big {
+        font-size: 28px;
+        padding: 24px 40px;
+        border-radius: 24px;
+      }
+      
+      .modal-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.6);
+        display: none;
+        justify-content: center;
+        align-items: center;
+        z-index: 1000;
+        animation: fadeIn 0.3s ease-out;
+      }
+      
+      .modal-overlay.show {
+        display: flex;
+      }
+      
+      .modal-content {
+        background: white;
+        padding: 40px;
+        border-radius: 28px;
+        box-shadow: 0 30px 60px rgba(0, 0, 0, 0.3);
+        text-align: center;
+        max-width: 500px;
+        margin: 20px;
+        animation: popIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+      }
+      
+      .modal-content h2 {
+        font-size: 32px;
+        margin: 0 0 20px;
+        color: #1e293b;
+      }
+      
+      .modal-content p {
+        font-size: 20px;
+        color: #475569;
+        margin: 0 0 30px;
+      }
 
       .btn:hover:not(:disabled) {
         transform: translateY(-3px) scale(1.02);
@@ -204,11 +251,6 @@
         align-items: center;
         gap: 10px;
       }
-      
-      .left-count::before {
-        content: '❓';
-        font-size: 24px;
-      }
 
       .left-count span {
         background: linear-gradient(135deg, #10b981, #14b8a6);
@@ -257,7 +299,6 @@
         border-color: #f59e0b;
         box-shadow: 0 8px 20px rgba(245, 158, 11, 0.3);
       }
-      .answer.unknown::before { content: '🤔 '; }
 
       .history {
         display: flex;
@@ -306,7 +347,6 @@
       
       .hitem.unknown { border-color: #f59e0b; background: #fef3c7; }
       .hitem.unknown .ha { color: #92400e; }
-      .hitem.unknown .ha::before { content: '🤔 '; }
 
       .result {
         margin-top: 16px;
@@ -438,6 +478,10 @@
         25% { transform: rotate(-3deg); }
         75% { transform: rotate(3deg); }
       }
+      @keyframes pulse {
+        0%, 100% { transform: scale(1); box-shadow: 0 6px 16px rgba(245, 158, 11, 0.4); }
+        50% { transform: scale(1.05); box-shadow: 0 12px 30px rgba(245, 158, 11, 0.6); }
+      }
 
       @media (min-width: 800px) {
         .row { grid-template-columns: 1.2fr 0.8fr; }
@@ -462,7 +506,7 @@
         <div class="meta">
           <div class="left-count">Осталось вопросов: <span id="left">10</span></div>
           <div class="actions">
-            <button class="btn" id="newGameBtn">Новая игра</button>
+            <button class="btn big" id="newGameBtn">Новая игра</button>
           </div>
         </div>
 
@@ -511,6 +555,14 @@
             <div class="history" id="history"></div>
           </div>
         </div>
+      </div>
+    </div>
+    
+    <div class="modal-overlay" id="welcomeModal">
+      <div class="modal-content">
+        <h2>🎮 Привет! 🎯</h2>
+        <p>Нажми "Новая игра" чтобы начать!</p>
+        <button class="btn big" id="modalStartBtn">Новая игра</button>
       </div>
     </div>
 
@@ -770,6 +822,34 @@
       initChips();
       setStatus("Нажми 'Новая игра'");
       updateAskEnabled();
+      
+      // Show welcome modal on first visit
+      const hasVisited = localStorage.getItem('hasVisited');
+      if (!hasVisited) {
+        const modal = $("welcomeModal");
+        modal.classList.add('show');
+        
+        $("modalStartBtn").addEventListener("click", () => {
+          modal.classList.remove('show');
+          localStorage.setItem('hasVisited', 'true');
+          startGame();
+        });
+        
+        // Close on overlay click
+        modal.addEventListener('click', (e) => {
+          if (e.target === modal) {
+            modal.classList.remove('show');
+            localStorage.setItem('hasVisited', 'true');
+          }
+        });
+      } else {
+        // Add pulse animation to new game button for returning users
+        const newGameBtn = $("newGameBtn");
+        newGameBtn.style.animation = 'pulse 2s ease-in-out infinite';
+        setTimeout(() => {
+          newGameBtn.style.animation = '';
+        }, 6000);
+      }
     </script>
   </body>
 </html>
