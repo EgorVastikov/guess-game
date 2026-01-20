@@ -334,8 +334,8 @@ function getSecretFeatures(secret) {
   const isFish = FISH.has(s);
   const thing = !living;
 
-  const canMove =CAN_FLY.has(s)g;
-  const canFly = isBird;
+  const canMove = living;
+  const canFly = CAN_FLY.has(s);
   const canSwim = SWIMS.has(s);
 
   const hasWings = isBird;
@@ -357,6 +357,21 @@ function getSecretFeatures(secret) {
     atHome: AT_HOME.has(s),
     biggerThanCat: BIGGER_THAN_CAT.has(s),
     handheld: HANDHELD.has(s),
+    schoolItem: SCHOOL_ITEM.has(s),
+    canMove,
+    canFly,
+    canSwim,
+    toy: TOYS.has(s),
+    natureRelated: living,
+    canTouch,
+    livesInForest: FOREST.has(s),
+    livesOnFarm: FARM.has(s),
+  };
+}
+
+async function createGame(env) {
+  const gameId = randomId();
+  const secret = pickSecret();
   
   const hard = isHard(secret);
   const left = hard ? 15 : 10;
@@ -374,22 +389,7 @@ function getSecretFeatures(secret) {
   };
 
   await saveGame(env, gameId, game);
-  return { gameId, left, isHard: hard
-  const gameId = randomId();
-  const secret = pickSecret();
-  const game = {
-    gameId,
-    secret,
-    left: DEFAULT_LEFT,
-    over: false,
-    win: false,
-    history: [],
-    createdAt: nowMs(),
-    lastAskAt: 0,
-  };
-
-  await saveGame(env, gameId, game);
-  return { gameId, left: DEFAULT_LEFT };
+  return { gameId, left, isHard: hard };
 }
 
 async function getGame(env, gameId) {
