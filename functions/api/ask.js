@@ -22,7 +22,7 @@ function hasOpenRouterKey(env) {
 }
 
 function openRouterModel(env) {
-  return String(env?.MODEL ?? "meta-llama/llama-3.3-8b-instruct:free").trim();
+  return String(env?.MODEL ?? "google/gemini-2.0-flash-exp:free").trim();
 }
 
 function openRouterBaseUrl(env) {
