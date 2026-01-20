@@ -77,6 +77,8 @@ function getCategoryHint(secret) {
   if (TOYS.has(s)) return "это игрушка";
   if (BIRDS.has(s)) return "это птица";
   if (FISH.has(s)) return "это водный житель";
+  if (FARM.has(s)) return "это животное на ферме";
+  if (FOREST.has(s)) return "это лесной житель";
   if (ANIMALS.has(s)) return "это животное";
   if (AT_HOME.has(s)) return "это бывает дома";
   return "это какой-то предмет";
@@ -366,6 +368,7 @@ function getSecretFeatures(secret) {
     canTouch,
     livesInForest: FOREST.has(s),
     livesOnFarm: FARM.has(s),
+    isDomestic: FARM.has(s) || (AT_HOME.has(s) && living),
   };
 }
 

@@ -136,6 +136,7 @@ function detectIntent(questionNorm) {
   if (q.includes("клюв")) return { type: "predicate", key: "hasBeak" };
   if (q.includes("пер") && q.includes("ья")) return { type: "predicate", key: "hasFeathers" };
   if (q.includes("ног") || q.includes("лап")) return { type: "predicate", key: "hasLegs" };
+  if (q.includes("домашн")) return { type: "predicate", key: "isDomestic" };
   if (q.includes("дома") || q.includes("дом")) return { type: "predicate", key: "atHome" };
   if (q.includes("больше") && q.includes("кошк")) return { type: "predicate", key: "biggerThanCat" };
   if ((q.includes("держ") && q.includes("рук")) || q.includes("в руке")) return { type: "predicate", key: "handheld" };
@@ -327,7 +328,7 @@ export async function onRequestPost(context) {
       message = "Вопросы закончились";
     }
     
-    if (!game.over && !game.win && game.left <= 3 && isHard(game.secret)) {
+    if (!game.over && !game.win && game.left <= 3) {
        const hint = getCategoryHint(game.secret);
        message = `Осталось мало вопросов! Подсказка: ${hint}`;
     }
