@@ -1,12 +1,12 @@
-const http = require("http");
-const fs = require("fs");
-const path = require("path");
-const { URL } = require("url");
+import http from "node:http";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
-const apiNew = require("./api/new");
-const apiAsk = require("./api/ask");
+import apiNew from "./api/new.js";
+import apiAsk from "./api/ask.js";
 
-const ROOT = __dirname;
+const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = path.join(ROOT, "public");
 
 function send(res, statusCode, body, headers = {}) {
@@ -54,7 +54,7 @@ function readBody(req) {
   });
 }
 
-function wrapVercelRes(nodeRes) {
+function wrapApiRes(nodeRes) {
   return {
     statusCode: 200,
     json(obj) {
@@ -88,7 +88,7 @@ async function handleApi(req, res, pathname) {
 
   req.body = bodyObj;
 
-  const vres = wrapVercelRes(res);
+  const vres = wrapApiRes(res);
 
   if (pathname === "/api/new") return apiNew(req, vres);
   if (pathname === "/api/ask") return apiAsk(req, vres);
@@ -139,11 +139,10 @@ const server = http.createServer(async (req, res) => {
 
 function printReady(port) {
   console.log(`Local server running: http://localhost:${port}`);
-  console.log(`Open / in browser, or use test.http with baseUrl=http://localhost:${port}`);
 }
 
 function start(port) {
-  server.listen(port, "0.0.0.0", () => printReady(port));
+  server.listen(port, "0.0.0.0", () => printReady(server.address().port));
 }
 
 const requestedPort = Number(process.env.PORT || 3000);

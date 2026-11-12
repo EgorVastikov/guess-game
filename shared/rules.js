@@ -250,10 +250,6 @@ function makeSet(items) {
   return new Set((items || []).map(normalize));
 }
 
-function nowMs() {
-  return Date.now();
-}
-
 function normalize(s) {
   return String(s || "")
     .toLowerCase()
@@ -271,75 +267,10 @@ function safeAnswer(value) {
   return "не знаю";
 }
 
-function isGuess(questionNorm, secretNorm) {
-  const q = normalize(questionNorm);
-  const s = normalize(secretNorm);
-  if (!q || !s) return false;
-
-  if (s.includes(" ")) {
-    return q.includes(s);
-  }
-
-  const words = q.split(" ");
-  return words.includes(s);
-}
-
 function pickSecret() {
   const idx = Math.floor(Math.random() * SECRETS.length);
   return SECRETS[idx];
 }
-
-function randomId(prefix = "game") {
-  const uuid = (crypto?.randomUUID?.() ?? "xxxxxxxx-xxxx").replace(/-/g, "");
-  return `${prefix}_${nowMs().toString(36)}_${uuid.slice(0, 10)}`;
-}
-
-function storeKind(env) {
-  const raw = normalize(env?.STORE_KIND ?? "");
-  if (raw === "upstash" || raw === "memory") return raw;
-
-  const hasUpstash = Boolean(env?.UPSTASH_REDIS_REST_URL && env?.UPSTASH_REDIS_REST_TOKEN);
-  return hasUpstash ? "upstash" : "memory";
-}
-
-async function upstashGet(env, key) {
-  const url = env?.UPSTASH_REDIS_REST_URL;
-  const token = env?.UPSTASH_REDIS_REST_TOKEN;
-  if (!url || !token) return null;
-
-  const res = await fetch(`${url}/get/${encodeURIComponent(key)}`, {
-    method: "GET",
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!res.ok) return null;
-
-  const data = await res.json().catch(() => null);
-  return data?.result ?? null;
-}
-
-async function upstashSet(env, key, value, ttlSeconds) {
-  const url = env?.UPSTASH_REDIS_REST_URL;
-  const token = env?.UPSTASH_REDIS_REST_TOKEN;
-  if (!url || !token) return false;
-
-  const encodedValue = encodeURIComponent(value);
-  const res = await fetch(`${url}/set/${encodeURIComponent(key)}/${encodedValue}`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!res.ok) return false;
-
-  if (typeof ttlSeconds === "number" && ttlSeconds > 0) {
-    await fetch(`${url}/expire/${encodeURIComponent(key)}/${ttlSeconds}`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}` },
-    }).catch(() => undefined);
-  }
-
-  return true;
-}
-
-const memory = new Map();
 
 function getSecretFeatures(secret) {
   const s = normalize(secret);
@@ -385,72 +316,124 @@ function getSecretFeatures(secret) {
   };
 }
 
-async function createGame(env) {
-  const gameId = randomId();
-  const secret = pickSecret();
-  
-  const hard = isHard(secret);
-  const left = hard ? 15 : 10;
-  
-  const game = {
-    gameId,
-    secret,
-    left,
-    over: false,
-    win: false,
-    history: [],
-    createdAt: nowMs(),
-    lastAskAt: 0,
-    isHard: hard,
-  };
+function detectIntent(questionNorm) {
+  const q = String(questionNorm || "");
 
-  await saveGame(env, gameId, game);
-  return { gameId, left, isHard: hard };
-}
-
-async function getGame(env, gameId) {
-  if (!gameId) return null;
-  const key = `game:${gameId}`;
-
-  if (storeKind(env) === "upstash") {
-    const raw = await upstashGet(env, key);
-    if (!raw) return null;
-    try {
-      return JSON.parse(raw);
-    } catch {
-      return null;
-    }
+  if (
+    q.includes("что загад") ||
+    q.includes("что зага") ||
+    q.includes("какой секрет") ||
+    q.includes("назови") ||
+    q.includes("подскажи") ||
+    q.includes("что это за")
+  ) {
+    return { type: "alwaysUnknown", key: "secretReveal" };
   }
 
-  return memory.get(key) ?? null;
-}
-
-async function saveGame(env, gameId, game) {
-  if (!gameId || !game) return false;
-  const key = `game:${gameId}`;
-  const ttlSeconds = 60 * 60;
-
-  if (storeKind(env) === "upstash") {
-    return upstashSet(env, key, JSON.stringify(game), ttlSeconds);
+  if (
+    q.includes("какого цвет") ||
+    q.includes("цвет") ||
+    q.includes("бел") ||
+    q.includes("черн") ||
+    q.includes("тёмн") ||
+    q.includes("темн") ||
+    q.includes("красн") ||
+    q.includes("син") ||
+    q.includes("зел")
+  ) {
+    return { type: "alwaysUnknown", key: "color" };
   }
 
-  memory.set(key, game);
-  return true;
+  if ((q.includes("больше") || q.includes("меньше")) && !q.includes("кошк")) {
+    return { type: "alwaysUnknown", key: "relativeSize" };
+  }
+
+  if (q.includes("лес")) return { type: "predicate", key: "livesInForest" };
+  if (q.includes("ферм")) return { type: "predicate", key: "livesOnFarm" };
+  if (q.includes("жив")) return { type: "predicate", key: "living" };
+  if (q.includes("вещ") || q.includes("предмет")) return { type: "predicate", key: "thing" };
+  if (q.includes("птиц")) return { type: "predicate", key: "isBird" };
+  if (q.includes("рыб")) return { type: "predicate", key: "isFish" };
+  if (q.includes("крыл")) return { type: "predicate", key: "hasWings" };
+  if (q.includes("клюв")) return { type: "predicate", key: "hasBeak" };
+  if (q.includes("пер") && q.includes("ья")) return { type: "predicate", key: "hasFeathers" };
+  if (q.includes("ног") || q.includes("лап")) return { type: "predicate", key: "hasLegs" };
+  if (q.includes("домашн")) return { type: "predicate", key: "isDomestic" };
+  if (q.includes("дома") || q.includes("дом")) return { type: "predicate", key: "atHome" };
+  if (q.includes("больше") && q.includes("кошк")) return { type: "predicate", key: "biggerThanCat" };
+  if ((q.includes("держ") && q.includes("рук")) || q.includes("в руке")) return { type: "predicate", key: "handheld" };
+  if (q.includes("школь") || q.includes("школ")) return { type: "predicate", key: "schoolItem" };
+  if (q.includes("двиг")) return { type: "predicate", key: "canMove" };
+  if (q.includes("лет")) return { type: "predicate", key: "canFly" };
+  if (q.includes("плав")) return { type: "predicate", key: "canSwim" };
+  if (q.includes("потрог") || q.includes("трог") || q.includes("пощуп")) return { type: "predicate", key: "canTouch" };
+  if (q.includes("игруш")) return { type: "predicate", key: "toy" };
+  if (q.includes("природ")) return { type: "predicate", key: "natureRelated" };
+
+  return null;
 }
 
-export {
-  DEFAULT_LEFT,
-  SECRETS,
-  nowMs,
-  normalize,
-  safeAnswer,
-  isGuess,
-  pickSecret,
-  isHard,
-  getCategoryHint,
-  getSecretFeatures,
-  createGame,
-  getGame,
-  saveGame,
-  storeKind,
-};
+function extractGuessCandidate(questionNorm) {
+  const q = normalize(questionNorm);
+
+  if (detectIntent(q)) return null;
+
+  let rest = q;
+  if (rest.startsWith("это ")) rest = rest.slice(4).trim();
+  if (!rest) return null;
+
+  const blockers = [
+    "больше",
+    "меньше",
+    "жив",
+    "вещ",
+    "предмет",
+    "птиц",
+    "рыб",
+    "крыл",
+    "клюв",
+    "пер",
+    "ног",
+    "лап",
+    "дома",
+    "дом",
+    "школ",
+    "держ",
+    "рук",
+    "лет",
+    "плав",
+    "двиг",
+    "потрог",
+    "трог",
+    "пощуп",
+    "цвет",
+    "природ",
+  ];
+  for (const b of blockers) {
+    if (rest.includes(b)) return null;
+  }
+
+  const words = rest.split(" ").filter(Boolean);
+  if (words.length < 1 || words.length > 3) return null;
+  return rest;
+}
+
+function isExactGuess(questionNorm, secretNorm) {
+  const cand = extractGuessCandidate(questionNorm);
+  if (!cand) return false;
+  return normalize(cand) === normalize(secretNorm);
+}
+
+function answerFromFeatures(secret, questionNorm) {
+  const intent = detectIntent(questionNorm);
+  if (!intent) return "не знаю";
+  if (intent.type === "alwaysUnknown") return "не знаю";
+
+  const features = getSecretFeatures(secret);
+  const value = features?.[intent.key];
+  if (typeof value !== "boolean") return "не знаю";
+  return value ? "да" : "нет";
+}
+
+
+export { DEFAULT_LEFT, SECRETS, normalize, safeAnswer, pickSecret, isHard, getCategoryHint, getSecretFeatures, detectIntent, extractGuessCandidate, isExactGuess, answerFromFeatures };

@@ -5,6 +5,7 @@ WORKDIR /app
 COPY package.json ./
 
 COPY api ./api
+COPY shared ./shared
 COPY public ./public
 COPY dev-local.js ./
 COPY README.md ./

@@ -667,7 +667,8 @@
         return /failed to fetch|networkerror|load failed|fetch/i.test(msg);
       }
 
-      async function apiPost(path, body, timeoutMs = 8000) {
+      // Server budget: 2.5s storage read + 9s AI + 2.5s storage write.
+      async function apiPost(path, body, timeoutMs = 20000) {
         const ctrl = new AbortController();
         const t = setTimeout(() => ctrl.abort(), timeoutMs);
 
@@ -724,7 +725,7 @@
           } else if (isNetworkError(e)) {
             setStatus("Нет интернета");
           } else {
-            setStatus("Сервис занят, попробуй ещё раз");
+            setStatus(e?.message || "Сервис занят, попробуй ещё раз");
           }
         } finally {
           setBusy(false);
@@ -770,7 +771,7 @@
           } else if (isNetworkError(e)) {
             setStatus("Нет интернета");
           } else {
-            setStatus("Сервис занят, попробуй ещё раз");
+            setStatus(e?.message || "Сервис занят, попробуй ещё раз");
           }
           setAnswer("не знаю");
         }
