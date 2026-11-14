@@ -21,6 +21,7 @@
       }
 
       * { box-sizing: border-box; }
+      [hidden] { display: none !important; }
 
       body {
         margin: 0;
@@ -124,6 +125,8 @@
         box-shadow: 0 30px 60px rgba(0, 0, 0, 0.3);
         text-align: center;
         max-width: 500px;
+        max-height: calc(100dvh - 40px);
+        overflow-y: auto;
         margin: 20px;
         animation: popIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
       }
@@ -165,6 +168,82 @@
       .btn.secondary:hover:not(:disabled) {
         box-shadow: 0 12px 24px rgba(168, 85, 247, 0.5);
       }
+
+      .game-controls {
+        display: grid;
+        gap: 12px;
+      }
+
+      .btn.hint {
+        background: #eff6ff;
+        border-color: #93c5fd;
+        color: #1e40af;
+        font-size: 17px;
+        box-shadow: 0 3px 10px rgba(59, 130, 246, 0.15);
+      }
+
+      .btn.hint:disabled { background: #e2e8f0; }
+
+      .hint-info {
+        margin: 10px 0;
+        color: #475569;
+        font-size: 14px;
+        line-height: 1.5;
+      }
+
+      .hint-list {
+        margin: 12px 0;
+        padding: 0;
+        list-style: none;
+        display: grid;
+        gap: 10px;
+      }
+
+      .hint-list li {
+        padding: 12px 14px;
+        border: 2px solid #bfdbfe;
+        border-radius: 14px;
+        background: #eff6ff;
+        color: #1e40af;
+        font-weight: 700;
+        line-height: 1.5;
+        overflow-wrap: anywhere;
+      }
+
+      .analysis-section {
+        margin-top: 28px;
+        padding-top: 24px;
+        border-top: 3px dashed #e2e8f0;
+        line-height: 1.6;
+        overflow-wrap: anywhere;
+      }
+
+      .analysis-section h2 { margin: 0 0 8px; font-size: 25px; }
+      .analysis-section h3 { margin: 18px 0 6px; font-size: 18px; color: #581c87; }
+      .analysis-section p { margin: 8px 0; }
+      .analysis-stats { color: #475569; font-size: 15px; }
+      .analysis-content { margin-top: 16px; padding: 18px; background: #faf5ff; border-radius: 18px; }
+      .analysis-notice { color: #92400e; background: #fef3c7; border-radius: 12px; padding: 12px; }
+      .analysis-section .btn { font-size: 17px; white-space: normal; }
+
+      .mode-picker { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 20px; }
+      .mode-picker .btn { flex: 1 1 240px; font-size: 17px; }
+      .mode-picker .btn[aria-pressed="false"] { background: #ffffff; color: #581c87; border-color: #d8b4fe; }
+      .drawing-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 16px 0; }
+      .drawing-toolbar label { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-weight: 700; }
+      .drawing-toolbar input[type="range"] { width: 110px; }
+      .drawing-toolbar input[type="color"] { width: 44px; height: 38px; cursor: pointer; }
+      .drawing-toolbar .btn { width: auto; min-width: 0; font-size: 15px; padding: 10px 14px; }
+      .drawing-toolbar .btn[aria-pressed="true"] { background: #581c87; color: white; }
+      .drawing-canvas { display: block; width: 100%; height: auto; border: 3px solid #cbd5e1; border-radius: 14px; background: white; touch-action: none; }
+      .drawing-info { color: #475569; line-height: 1.6; overflow-wrap: anywhere; }
+      .drawing-guess-panel { padding: 16px; margin-top: 16px; background: #faf5ff; border: 2px solid #e9d5ff; border-radius: 18px; overflow-wrap: anywhere; }
+      .drawing-guess-panel h2 { font-size: 22px; margin: 0 0 10px; }
+      .drawing-guesses { padding-left: 24px; font-size: 20px; font-weight: 700; }
+      .drawing-feedback { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+      .drawing-feedback .btn { min-width: 0; font-size: 16px; padding: 12px; white-space: normal; }
+      .drawing-panel .meta .btn { font-size: 19px; }
+      .modal-content .btn { font-size: 20px; padding: 16px; margin-top: 12px; }
 
       .pill {
         display: inline-flex;
@@ -436,7 +515,7 @@
         padding: 0;
         list-style: none;
         display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+        grid-template-columns: repeat(auto-fill, minmax(min(200px, 100%), 1fr));
         gap: 10px;
       }
       
@@ -492,13 +571,27 @@
         }
       }
 
+      @media (max-width: 480px) {
+        .wrap { padding: 10px 0; }
+        .card { padding: 18px; }
+        .title { font-size: 28px; }
+        .btn.big { font-size: 22px; padding: 18px 24px; }
+        .left-count { font-size: 19px; flex-wrap: wrap; }
+        .modal-content { padding: 24px; }
+      }
+
     </style>
   </head>
   <body>
     <div class="wrap">
-      <div class="title">Угадай предмет/животное</div>
+      <div class="title" id="mainTitle">Угадай предмет/животное</div>
+      <div class="mode-picker" role="group" aria-label="Режим игры">
+        <button class="btn secondary" id="wordModeBtn" aria-pressed="true">Угадай слово</button>
+        <button class="btn secondary" id="drawingModeBtn" aria-pressed="false">Нарисуй — ИИ угадает</button>
+      </div>
 
       <div class="card">
+        <div id="wordPanel">
         <div class="meta">
           <div class="left-count">Осталось вопросов: <span id="left">10</span></div>
           <div class="actions">
@@ -533,9 +626,17 @@
             <div class="chips" id="chips"></div>
 
             <div style="height: 12px"></div>
-            <button class="btn secondary" id="askBtn" disabled>Спросить</button>
+            <div class="game-controls">
+              <button class="btn secondary" id="askBtn" disabled>Спросить</button>
+              <button class="btn hint" id="hintBtn" disabled aria-describedby="hintInfo">Подсказка</button>
+            </div>
+            <div class="hint-info" id="hintInfo">
+              Подсказок использовано: <span id="hintsUsed">0</span> из <span id="hintLimit">2</span>.
+              Вопросы не тратятся.
+            </div>
+            <ol class="hint-list" id="hints" aria-label="Полученные подсказки" aria-live="polite"></ol>
             <div style="height: 8px"></div>
-            <div class="muted" id="status"></div>
+            <div class="muted" id="status" role="status"></div>
           </div>
 
           <div>
@@ -551,18 +652,71 @@
             <div class="history" id="history"></div>
           </div>
         </div>
+
+        <section class="analysis-section" id="analysisSection" aria-labelledby="analysisTitle" hidden>
+          <h2 id="analysisTitle">Разбор игры</h2>
+          <p>Посмотрим, какие вопросы помогли и что можно попробовать в следующей партии.</p>
+          <p class="analysis-stats" id="analysisStats"></p>
+          <p class="analysis-notice" id="analysisNotice" hidden></p>
+          <button class="btn secondary" id="analysisBtn" disabled>Разобрать игру</button>
+          <p class="muted" id="analysisStatus" role="status"></p>
+          <div class="analysis-content" id="analysisContent" hidden>
+            <h3>Что получилось хорошо</h3>
+            <p id="analysisStrength"></p>
+            <h3>Полезный вопрос</h3>
+            <p id="analysisBestQuestion"></p>
+            <p id="analysisBestReason"></p>
+            <h3>Что попробовать иначе</h3>
+            <p id="analysisImprovement"></p>
+            <h3>Вопрос для следующей партии</h3>
+            <p id="analysisNextQuestion"></p>
+          </div>
+        </section>
+        </div>
+
+        <section class="drawing-panel" id="drawingPanel" aria-labelledby="drawingTitle" hidden>
+          <div class="meta">
+            <div class="label" id="drawingTitle">Ты рисуешь — ИИ угадывает</div>
+            <button class="btn" id="drawingNewBtn">Новый рисунок</button>
+          </div>
+          <p class="drawing-info">Рисуй мышью, пальцем или пером. Когда закончишь, нажми «Угадай».
+            Если ИИ ошибся, можно дорисовать подробности и попробовать ещё раз.</p>
+          <div class="drawing-toolbar" role="group" aria-label="Инструменты рисования">
+            <label>Цвет <input type="color" id="drawingColor" value="#1e293b"></label>
+            <label>Толщина <input type="range" id="drawingWidth" min="2" max="40" value="8">
+              <output id="drawingWidthValue" for="drawingWidth">8</output></label>
+            <button class="btn hint" id="drawingEraser" aria-pressed="false">Ластик</button>
+            <button class="btn hint" id="drawingUndo" disabled>Отменить штрих</button>
+            <button class="btn hint" id="drawingClear" disabled>Очистить</button>
+          </div>
+          <canvas class="drawing-canvas" id="drawingCanvas" width="800" height="600" aria-label="Полотно для рисования">Для рисования нужен браузер с поддержкой canvas.</canvas>
+          <p class="drawing-info">Попыток ИИ: <span id="drawingAttempts">0</span>. Отправляется только рисунок — без загаданного слова.</p>
+          <button class="btn secondary" id="drawingGuessBtn" disabled>Угадай</button>
+          <p class="muted" id="drawingStatus" role="status">Нарисуй что-нибудь на белом полотне</p>
+          <section class="drawing-guess-panel" id="drawingGuessPanel" aria-labelledby="drawingGuessTitle" hidden>
+            <h2 id="drawingGuessTitle">Предположения ИИ</h2>
+            <ul class="drawing-guesses" id="drawingGuesses"></ul>
+            <p id="drawingQuestion"></p>
+            <div class="drawing-feedback">
+              <button class="btn" id="drawingYes" disabled>Угадал!</button>
+              <button class="btn hint" id="drawingNo" disabled>Не угадал</button>
+            </div>
+          </section>
+        </section>
       </div>
     </div>
     
     <div class="modal-overlay" id="welcomeModal">
       <div class="modal-content">
         <h2>🎮 Привет! 🎯</h2>
-        <p>Нажми "Новая игра" чтобы начать!</p>
-        <button class="btn big" id="modalStartBtn">Новая игра</button>
+        <p>Выбери: угадывать слово или нарисовать что-нибудь для ИИ.</p>
+        <button class="btn" id="modalStartBtn">Угадай слово</button>
+        <button class="btn secondary" id="modalDrawBtn">Нарисуй — ИИ угадает</button>
       </div>
     </div>
 
-    <script>
+    <script type="module">
+      import { createDrawingController } from "/drawing.js";
       const $ = (id) => document.getElementById(id);
 
       const chips = [
@@ -578,9 +732,16 @@
       let over = false;
       let history = [];
       let isBusy = false;
+      let hintsLeft = 2;
+      let noHintDirections = false;
+      let savedAnalysis = null;
+      let waitingForAnalysis = false;
+      let mode = "word";
 
       const NEW_GAME_TEXT = "Новая игра";
       const ASK_TEXT = "Спросить";
+      const HINT_TEXT = "Подсказка";
+      const ANALYSIS_TEXT = "Разобрать игру";
 
       function setStatus(text) {
         $("status").textContent = text || "";
@@ -614,10 +775,32 @@
         });
       }
 
+      function renderHints(data = {}) {
+        const hints = Array.isArray(data.hints) ? data.hints : [];
+        const limit = Number(data.hintLimit ?? 2);
+        hintsLeft = Number(data.hintsLeft ?? Math.max(0, limit - hints.length));
+        $("hintsUsed").textContent = String(data.hintsUsed ?? hints.length);
+        $("hintLimit").textContent = String(limit);
+        const root = $("hints");
+        root.replaceChildren();
+        hints.forEach((hint, index) => {
+          const item = document.createElement("li");
+          item.textContent = `${index + 1}. ${hint.text}`;
+          root.appendChild(item);
+        });
+      }
+
       function setResult(over, win, secret) {
+        $("analysisSection").hidden = !over;
         const title = $("finalTitle");
         const el = $("result");
         if (!over) {
+          savedAnalysis = null;
+          waitingForAnalysis = false;
+          $("analysisContent").hidden = true;
+          $("analysisStats").textContent = "";
+          $("analysisNotice").hidden = true;
+          $("analysisStatus").textContent = "";
           title.style.display = "none";
           title.textContent = "";
           title.classList.remove("win", "lose");
@@ -640,23 +823,66 @@
         }
       }
 
+      function renderAnalysisStats(stats) {
+        if (!stats) return;
+        $("analysisStats").textContent = `Вопросов: ${stats.turns}. Подсказок: ${stats.hintsUsed}. ` +
+          `Повторов: ${stats.repeats}. Ответов «не знаю»: ${stats.unknownAnswers}.`;
+        const hasInconsistencies = Array.isArray(stats.inconsistentTurns) && stats.inconsistentTurns.length > 0;
+        $("analysisNotice").hidden = !hasInconsistencies;
+        $("analysisNotice").textContent = hasInconsistencies
+          ? "В ответах игры могли быть неточности. Они не считаются твоей ошибкой." : "";
+      }
+
+      function renderAnalysis(analysis) {
+        savedAnalysis = analysis;
+        waitingForAnalysis = false;
+        renderAnalysisStats(analysis.stats);
+        $("analysisStrength").textContent = analysis.strength;
+        const best = analysis.bestQuestion;
+        $("analysisBestQuestion").textContent = best
+          ? `№${best.turn}. «${best.question}» Ответ: «${best.answer}».`
+          : "В этой партии нет вопроса, который можно уверенно выделить.";
+        $("analysisBestReason").textContent = best?.reason || "";
+        $("analysisImprovement").textContent = analysis.improvement;
+        $("analysisNextQuestion").textContent = analysis.nextQuestion;
+        $("analysisContent").hidden = false;
+      }
+
+      function analysisButtonText() {
+        if (savedAnalysis) return $("analysisContent").hidden ? "Открыть разбор" : "Скрыть разбор";
+        return waitingForAnalysis ? "Проверить разбор" : ANALYSIS_TEXT;
+      }
+
       function updateAskEnabled() {
         const hasQuestion = $("question").value.trim().length > 0;
         $("askBtn").disabled = isBusy || !gameId || !hasQuestion || over;
+        $("hintBtn").disabled = isBusy || !gameId || over || hintsLeft <= 0 || noHintDirections;
+        $("analysisBtn").disabled = isBusy || !gameId || !over;
         $("newGameBtn").disabled = isBusy;
+        $("wordModeBtn").disabled = $("drawingModeBtn").disabled = isBusy;
+        drawing.updateControls();
       }
 
       function setBusy(value, label) {
         isBusy = Boolean(value);
         if (isBusy) {
-          if (label === "new") {
+          if (label?.startsWith("drawing-")) {
+            drawing.setBusyLabel(label);
+          } else if (label === "new") {
             $("newGameBtn").textContent = "Начинаю...";
+          } else if (label === "hint") {
+            $("hintBtn").textContent = "Ищу подсказку...";
+          } else if (label === "analysis") {
+            $("analysisBtn").textContent = "Готовлю разбор...";
           } else {
             $("askBtn").textContent = "Думаю...";
           }
         } else {
           $("newGameBtn").textContent = NEW_GAME_TEXT;
           $("askBtn").textContent = ASK_TEXT;
+          $("hintBtn").textContent = HINT_TEXT;
+          $("analysisBtn").textContent = analysisButtonText();
+          drawing.resetLabels();
         }
         updateAskEnabled();
       }
@@ -667,7 +893,8 @@
         return /failed to fetch|networkerror|load failed|fetch/i.test(msg);
       }
 
-      async function apiPost(path, body, timeoutMs = 8000) {
+      // Server budget: 2.5s storage read + 9s AI + 2.5s storage write.
+      async function apiPost(path, body, timeoutMs = 20000) {
         const ctrl = new AbortController();
         const t = setTimeout(() => ctrl.abort(), timeoutMs);
 
@@ -684,6 +911,7 @@
             const msg = data?.message || "Сервис занят, попробуй ещё раз";
             const e = new Error(msg);
             e.status = res.status;
+            e.data = data;
             throw e;
           }
           return data;
@@ -693,6 +921,7 @@
       }
 
       async function startGame() {
+        if (isBusy) return;
         setStatus("Начинаю игру...");
         setBusy(true, "new");
 
@@ -702,6 +931,8 @@
           gameId = data.gameId;
           over = false;
           history = Array.isArray(data.history) ? data.history : [];
+          noHintDirections = false;
+          renderHints(data);
 
           setLeft(data.left);
           setAnswer("не знаю");
@@ -714,6 +945,8 @@
           gameId = null;
           over = false;
           history = [];
+          noHintDirections = false;
+          renderHints();
           renderHistory(history);
           setAnswer("не знаю");
           setResult(false, false, null);
@@ -724,7 +957,7 @@
           } else if (isNetworkError(e)) {
             setStatus("Нет интернета");
           } else {
-            setStatus("Сервис занят, попробуй ещё раз");
+            setStatus(e?.message || "Сервис занят, попробуй ещё раз");
           }
         } finally {
           setBusy(false);
@@ -737,6 +970,7 @@
       }
 
       async function onAskClick() {
+        if (isBusy) return;
         const question = $("question").value.trim();
         if (!question) return;
         if (!gameId) {
@@ -755,10 +989,13 @@
 
           history = data.history || [];
           renderHistory(history);
+          renderHints(data);
 
           over = Boolean(data.over);
           if (over) {
             setResult(true, Boolean(data.win), data.secret);
+            renderAnalysisStats(data.stats);
+            if (data.analysis) renderAnalysis(data.analysis);
           } else {
             setResult(false, false, null);
           }
@@ -770,13 +1007,81 @@
           } else if (isNetworkError(e)) {
             setStatus("Нет интернета");
           } else {
-            setStatus("Сервис занят, попробуй ещё раз");
+            setStatus(e?.message || "Сервис занят, попробуй ещё раз");
           }
           setAnswer("не знаю");
         }
 
         $("question").focus();
         setBusy(false);
+      }
+
+      async function onHintClick() {
+        if (isBusy || !gameId || over || hintsLeft <= 0 || noHintDirections) return;
+        setStatus("Ищу полезную подсказку...");
+        setBusy(true, "hint");
+        try {
+          const data = await apiPost("/api/hint", { gameId });
+          renderHints(data);
+          // A hint never replaces the last answer or edits the question input.
+          setStatus(data.message || "Подсказка готова");
+        } catch (e) {
+          if (Array.isArray(e?.data?.hints)) {
+            renderHints(e.data);
+            over = Boolean(e.data.over);
+            setLeft(e.data.left);
+            history = e.data.history || [];
+            renderHistory(history);
+            setResult(over, Boolean(e.data.win), e.data.secret);
+            if (over) {
+              renderAnalysisStats(e.data.stats);
+              if (e.data.analysis) renderAnalysis(e.data.analysis);
+            }
+          }
+          if (e?.data?.code === "no_hint_directions") noHintDirections = true;
+          if (e?.name === "AbortError") {
+            setStatus("Подсказка не успела прийти. Можно продолжить игру или попробовать ещё раз");
+          } else if (isNetworkError(e)) {
+            setStatus("Нет интернета. Твой вопрос и подсказки сохранены на странице");
+          } else {
+            setStatus(e?.message || "Подсказка недоступна. Можно продолжить игру");
+          }
+        } finally {
+          setBusy(false);
+        }
+      }
+
+      async function onAnalysisClick() {
+        if (isBusy || !gameId || !over) return;
+        if (savedAnalysis) {
+          $("analysisContent").hidden = !$("analysisContent").hidden;
+          $("analysisBtn").textContent = analysisButtonText();
+          return;
+        }
+        $("analysisStatus").textContent = "Смотрю историю вопросов...";
+        setBusy(true, "analysis");
+        try {
+          // Analysis allows 15s for AI plus storage operations and transport.
+          const data = await apiPost("/api/analysis", { gameId }, 30000);
+          if (data.pending) {
+            waitingForAnalysis = true;
+            renderAnalysisStats(data.stats);
+            $("analysisStatus").textContent = data.message;
+          } else {
+            if (!data.analysis) throw new Error("Не удалось получить разбор. Попробуй ещё раз");
+            renderAnalysis(data.analysis);
+            $("analysisStatus").textContent = "Разбор готов. Можно сыграть ещё раз!";
+          }
+        } catch (e) {
+          renderAnalysisStats(e?.data?.stats);
+          $("analysisStatus").textContent = e?.name === "AbortError"
+            ? "Разбор не успел прийти. Попробуй открыть его чуть позже"
+            : isNetworkError(e)
+              ? "Нет интернета. Результат игры сохранён на странице"
+              : e?.message || "Разбор недоступен. Можно начать новую игру";
+        } finally {
+          setBusy(false);
+        }
       }
 
       function escapeHtml(s) {
@@ -806,8 +1111,28 @@
         });
       }
 
+      const drawing = createDrawingController({ $, apiPost, setBusy, isBusy: () => isBusy, updateControls: updateAskEnabled });
+
+      async function switchMode(nextMode) {
+        if (isBusy) return;
+        mode = nextMode;
+        $("wordPanel").hidden = mode !== "word";
+        $("drawingPanel").hidden = mode !== "drawing";
+        $("wordModeBtn").setAttribute("aria-pressed", String(mode === "word"));
+        $("drawingModeBtn").setAttribute("aria-pressed", String(mode === "drawing"));
+        $("mainTitle").textContent = mode === "word" ? "Угадай предмет/животное" : "Нарисуй — ИИ угадает";
+        if (mode === "drawing") await drawing.ensureStarted();
+        updateAskEnabled();
+      }
+
+      drawing.init();
+      $("wordModeBtn").addEventListener("click", () => switchMode("word"));
+      $("drawingModeBtn").addEventListener("click", () => switchMode("drawing"));
+
       $("newGameBtn").addEventListener("click", startGame);
       $("askBtn").addEventListener("click", onAskClick);
+      $("hintBtn").addEventListener("click", onHintClick);
+      $("analysisBtn").addEventListener("click", onAnalysisClick);
       $("question").addEventListener("input", updateAskEnabled);
       $("question").addEventListener("keydown", (e) => {
         if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
@@ -819,23 +1144,37 @@
       setStatus("Нажми 'Новая игра'");
       updateAskEnabled();
       
+      // Storage is optional: private/embedded browser policies may deny access.
+      function hasVisitedBefore() {
+        try { return localStorage.getItem('hasVisited'); } catch { return false; }
+      }
+
+      function rememberVisit() {
+        try { localStorage.setItem('hasVisited', 'true'); } catch { /* Play without saving this preference. */ }
+      }
+
       // Show welcome modal on first visit
-      const hasVisited = localStorage.getItem('hasVisited');
+      const hasVisited = hasVisitedBefore();
       if (!hasVisited) {
         const modal = $("welcomeModal");
         modal.classList.add('show');
         
         $("modalStartBtn").addEventListener("click", () => {
           modal.classList.remove('show');
-          localStorage.setItem('hasVisited', 'true');
+          rememberVisit();
           startGame();
+        });
+        $("modalDrawBtn").addEventListener("click", () => {
+          modal.classList.remove('show');
+          rememberVisit();
+          switchMode("drawing");
         });
         
         // Close on overlay click
         modal.addEventListener('click', (e) => {
           if (e.target === modal) {
             modal.classList.remove('show');
-            localStorage.setItem('hasVisited', 'true');
+            rememberVisit();
           }
         });
       } else {

@@ -1,12 +1,20 @@
-const http = require("http");
-const fs = require("fs");
-const path = require("path");
-const { URL } = require("url");
+import http from "node:http";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { loadEnvFile } from "node:process";
 
-const apiNew = require("./api/new");
-const apiAsk = require("./api/ask");
+import apiNew from "./api/new.js";
+import apiAsk from "./api/ask.js";
+import apiHint from "./api/hint.js";
+import apiAnalysis from "./api/analysis.js";
+import apiDraw from "./api/draw.js";
+import apiConfirm from "./api/confirm.js";
+import { MAX_REQUEST_BYTES } from "./shared/config.js";
 
-const ROOT = __dirname;
+const ROOT = path.dirname(fileURLToPath(import.meta.url));
+const ENV_FILE = path.join(ROOT, ".env");
+if (fs.existsSync(ENV_FILE)) loadEnvFile(ENV_FILE);
 const PUBLIC_DIR = path.join(ROOT, "public");
 
 function send(res, statusCode, body, headers = {}) {
@@ -38,23 +46,32 @@ function contentTypeFor(filePath) {
 }
 
 function safeJoinPublic(urlPath) {
-  const decoded = decodeURIComponent(urlPath);
-  const clean = decoded.replace(/\0/g, "");
-  const filePath = path.normalize(path.join(PUBLIC_DIR, clean));
-  if (!filePath.startsWith(PUBLIC_DIR)) return null;
+  let decoded;
+  try { decoded = decodeURIComponent(urlPath); } catch { return null; }
+  if (decoded.includes("\0")) return null;
+  const filePath = path.normalize(path.join(PUBLIC_DIR, decoded));
+  const relative = path.relative(PUBLIC_DIR, filePath);
+  if (relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) return null;
   return filePath;
 }
 
 function readBody(req) {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     const chunks = [];
-    req.on("data", (c) => chunks.push(c));
+    let size = 0;
+    req.on("data", (c) => {
+      size += c.length;
+      if (size > MAX_REQUEST_BYTES) {
+        chunks.length = 0;
+        reject(new Error("Payload too large"));
+      } else chunks.push(c);
+    });
     req.on("end", () => resolve(Buffer.concat(chunks)));
     req.on("error", () => resolve(Buffer.alloc(0)));
   });
 }
 
-function wrapVercelRes(nodeRes) {
+function wrapApiRes(nodeRes) {
   return {
     statusCode: 200,
     json(obj) {
@@ -68,7 +85,10 @@ async function handleApi(req, res, pathname) {
     return sendJson(res, 405, { message: "Method not allowed" });
   }
 
-  const rawBuf = await readBody(req);
+  let rawBuf;
+  try { rawBuf = await readBody(req); } catch {
+    return sendJson(res, 413, { message: "Запрос слишком большой. Упрости рисунок и попробуй ещё раз" });
+  }
   let rawText = "";
   try {
     rawText = rawBuf.toString("utf8");
@@ -88,10 +108,14 @@ async function handleApi(req, res, pathname) {
 
   req.body = bodyObj;
 
-  const vres = wrapVercelRes(res);
+  const vres = wrapApiRes(res);
 
   if (pathname === "/api/new") return apiNew(req, vres);
   if (pathname === "/api/ask") return apiAsk(req, vres);
+  if (pathname === "/api/hint") return apiHint(req, vres);
+  if (pathname === "/api/analysis") return apiAnalysis(req, vres);
+  if (pathname === "/api/draw") return apiDraw(req, vres);
+  if (pathname === "/api/confirm") return apiConfirm(req, vres);
 
   return sendJson(res, 404, { message: "Not found" });
 }
@@ -139,11 +163,10 @@ const server = http.createServer(async (req, res) => {
 
 function printReady(port) {
   console.log(`Local server running: http://localhost:${port}`);
-  console.log(`Open / in browser, or use test.http with baseUrl=http://localhost:${port}`);
 }
 
 function start(port) {
-  server.listen(port, "0.0.0.0", () => printReady(port));
+  server.listen(port, "0.0.0.0", () => printReady(server.address().port));
 }
 
 const requestedPort = Number(process.env.PORT || 3000);
