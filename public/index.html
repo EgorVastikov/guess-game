@@ -207,6 +207,22 @@
         overflow-wrap: anywhere;
       }
 
+      .analysis-section {
+        margin-top: 28px;
+        padding-top: 24px;
+        border-top: 3px dashed #e2e8f0;
+        line-height: 1.6;
+        overflow-wrap: anywhere;
+      }
+
+      .analysis-section h2 { margin: 0 0 8px; font-size: 25px; }
+      .analysis-section h3 { margin: 18px 0 6px; font-size: 18px; color: #581c87; }
+      .analysis-section p { margin: 8px 0; }
+      .analysis-stats { color: #475569; font-size: 15px; }
+      .analysis-content { margin-top: 16px; padding: 18px; background: #faf5ff; border-radius: 18px; }
+      .analysis-notice { color: #92400e; background: #fef3c7; border-radius: 12px; padding: 12px; }
+      .analysis-section .btn { font-size: 17px; white-space: normal; }
+
       .pill {
         display: inline-flex;
         align-items: center;
@@ -600,6 +616,26 @@
             <div class="history" id="history"></div>
           </div>
         </div>
+
+        <section class="analysis-section" id="analysisSection" aria-labelledby="analysisTitle" hidden>
+          <h2 id="analysisTitle">Разбор игры</h2>
+          <p>Посмотрим, какие вопросы помогли и что можно попробовать в следующей партии.</p>
+          <p class="analysis-stats" id="analysisStats"></p>
+          <p class="analysis-notice" id="analysisNotice" hidden></p>
+          <button class="btn secondary" id="analysisBtn" disabled>Разобрать игру</button>
+          <p class="muted" id="analysisStatus" role="status"></p>
+          <div class="analysis-content" id="analysisContent" hidden>
+            <h3>Что получилось хорошо</h3>
+            <p id="analysisStrength"></p>
+            <h3>Полезный вопрос</h3>
+            <p id="analysisBestQuestion"></p>
+            <p id="analysisBestReason"></p>
+            <h3>Что попробовать иначе</h3>
+            <p id="analysisImprovement"></p>
+            <h3>Вопрос для следующей партии</h3>
+            <p id="analysisNextQuestion"></p>
+          </div>
+        </section>
       </div>
     </div>
     
@@ -629,10 +665,13 @@
       let isBusy = false;
       let hintsLeft = 2;
       let noHintDirections = false;
+      let savedAnalysis = null;
+      let waitingForAnalysis = false;
 
       const NEW_GAME_TEXT = "Новая игра";
       const ASK_TEXT = "Спросить";
       const HINT_TEXT = "Подсказка";
+      const ANALYSIS_TEXT = "Разобрать игру";
 
       function setStatus(text) {
         $("status").textContent = text || "";
@@ -682,9 +721,16 @@
       }
 
       function setResult(over, win, secret) {
+        $("analysisSection").hidden = !over;
         const title = $("finalTitle");
         const el = $("result");
         if (!over) {
+          savedAnalysis = null;
+          waitingForAnalysis = false;
+          $("analysisContent").hidden = true;
+          $("analysisStats").textContent = "";
+          $("analysisNotice").hidden = true;
+          $("analysisStatus").textContent = "";
           title.style.display = "none";
           title.textContent = "";
           title.classList.remove("win", "lose");
@@ -707,10 +753,41 @@
         }
       }
 
+      function renderAnalysisStats(stats) {
+        if (!stats) return;
+        $("analysisStats").textContent = `Вопросов: ${stats.turns}. Подсказок: ${stats.hintsUsed}. ` +
+          `Повторов: ${stats.repeats}. Ответов «не знаю»: ${stats.unknownAnswers}.`;
+        const hasInconsistencies = Array.isArray(stats.inconsistentTurns) && stats.inconsistentTurns.length > 0;
+        $("analysisNotice").hidden = !hasInconsistencies;
+        $("analysisNotice").textContent = hasInconsistencies
+          ? "В ответах игры могли быть неточности. Они не считаются твоей ошибкой." : "";
+      }
+
+      function renderAnalysis(analysis) {
+        savedAnalysis = analysis;
+        waitingForAnalysis = false;
+        renderAnalysisStats(analysis.stats);
+        $("analysisStrength").textContent = analysis.strength;
+        const best = analysis.bestQuestion;
+        $("analysisBestQuestion").textContent = best
+          ? `№${best.turn}. «${best.question}» Ответ: «${best.answer}».`
+          : "В этой партии нет вопроса, который можно уверенно выделить.";
+        $("analysisBestReason").textContent = best?.reason || "";
+        $("analysisImprovement").textContent = analysis.improvement;
+        $("analysisNextQuestion").textContent = analysis.nextQuestion;
+        $("analysisContent").hidden = false;
+      }
+
+      function analysisButtonText() {
+        if (savedAnalysis) return $("analysisContent").hidden ? "Открыть разбор" : "Скрыть разбор";
+        return waitingForAnalysis ? "Проверить разбор" : ANALYSIS_TEXT;
+      }
+
       function updateAskEnabled() {
         const hasQuestion = $("question").value.trim().length > 0;
         $("askBtn").disabled = isBusy || !gameId || !hasQuestion || over;
         $("hintBtn").disabled = isBusy || !gameId || over || hintsLeft <= 0 || noHintDirections;
+        $("analysisBtn").disabled = isBusy || !gameId || !over;
         $("newGameBtn").disabled = isBusy;
       }
 
@@ -721,6 +798,8 @@
             $("newGameBtn").textContent = "Начинаю...";
           } else if (label === "hint") {
             $("hintBtn").textContent = "Ищу подсказку...";
+          } else if (label === "analysis") {
+            $("analysisBtn").textContent = "Готовлю разбор...";
           } else {
             $("askBtn").textContent = "Думаю...";
           }
@@ -728,6 +807,7 @@
           $("newGameBtn").textContent = NEW_GAME_TEXT;
           $("askBtn").textContent = ASK_TEXT;
           $("hintBtn").textContent = HINT_TEXT;
+          $("analysisBtn").textContent = analysisButtonText();
         }
         updateAskEnabled();
       }
@@ -839,6 +919,8 @@
           over = Boolean(data.over);
           if (over) {
             setResult(true, Boolean(data.win), data.secret);
+            renderAnalysisStats(data.stats);
+            if (data.analysis) renderAnalysis(data.analysis);
           } else {
             setResult(false, false, null);
           }
@@ -876,6 +958,10 @@
             history = e.data.history || [];
             renderHistory(history);
             setResult(over, Boolean(e.data.win), e.data.secret);
+            if (over) {
+              renderAnalysisStats(e.data.stats);
+              if (e.data.analysis) renderAnalysis(e.data.analysis);
+            }
           }
           if (e?.data?.code === "no_hint_directions") noHintDirections = true;
           if (e?.name === "AbortError") {
@@ -885,6 +971,39 @@
           } else {
             setStatus(e?.message || "Подсказка недоступна. Можно продолжить игру");
           }
+        } finally {
+          setBusy(false);
+        }
+      }
+
+      async function onAnalysisClick() {
+        if (isBusy || !gameId || !over) return;
+        if (savedAnalysis) {
+          $("analysisContent").hidden = !$("analysisContent").hidden;
+          $("analysisBtn").textContent = analysisButtonText();
+          return;
+        }
+        $("analysisStatus").textContent = "Смотрю историю вопросов...";
+        setBusy(true, "analysis");
+        try {
+          // Analysis allows 15s for AI plus storage operations and transport.
+          const data = await apiPost("/api/analysis", { gameId }, 30000);
+          if (data.pending) {
+            waitingForAnalysis = true;
+            renderAnalysisStats(data.stats);
+            $("analysisStatus").textContent = data.message;
+          } else {
+            if (!data.analysis) throw new Error("Не удалось получить разбор. Попробуй ещё раз");
+            renderAnalysis(data.analysis);
+            $("analysisStatus").textContent = "Разбор готов. Можно сыграть ещё раз!";
+          }
+        } catch (e) {
+          renderAnalysisStats(e?.data?.stats);
+          $("analysisStatus").textContent = e?.name === "AbortError"
+            ? "Разбор не успел прийти. Попробуй открыть его чуть позже"
+            : isNetworkError(e)
+              ? "Нет интернета. Результат игры сохранён на странице"
+              : e?.message || "Разбор недоступен. Можно начать новую игру";
         } finally {
           setBusy(false);
         }
@@ -920,6 +1039,7 @@
       $("newGameBtn").addEventListener("click", startGame);
       $("askBtn").addEventListener("click", onAskClick);
       $("hintBtn").addEventListener("click", onHintClick);
+      $("analysisBtn").addEventListener("click", onAnalysisClick);
       $("question").addEventListener("input", updateAskEnabled);
       $("question").addEventListener("keydown", (e) => {
         if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {

@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import apiNew from "./api/new.js";
 import apiAsk from "./api/ask.js";
 import apiHint from "./api/hint.js";
+import apiAnalysis from "./api/analysis.js";
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = path.join(ROOT, "public");
@@ -94,6 +95,7 @@ async function handleApi(req, res, pathname) {
   if (pathname === "/api/new") return apiNew(req, vres);
   if (pathname === "/api/ask") return apiAsk(req, vres);
   if (pathname === "/api/hint") return apiHint(req, vres);
+  if (pathname === "/api/analysis") return apiAnalysis(req, vres);
 
   return sendJson(res, 404, { message: "Not found" });
 }

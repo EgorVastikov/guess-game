@@ -1,7 +1,8 @@
-import { ASK_INTERVAL_MS } from "./config.js";
+import { ASK_INTERVAL_MS, ANALYSIS_PENDING_MS } from "./config.js";
 import { AIError, hasAIKey, requestAI } from "./ai.js";
 import { getGame, saveGame, StoreError, StoreConflictError } from "./store.js";
 import { chooseHint, hintCandidates, hintState } from "./hints.js";
+import { gameStats, generateAnalysis } from "./analysis.js";
 import {
   DEFAULT_LEFT, normalize, pickSecret, isHard, getCategoryHint,
   extractGuessCandidate, isExactGuess, answerFromFeatures, safeAnswer,
@@ -16,6 +17,7 @@ function snapshot(game, answer = "не знаю", message = "") {
     secret: game?.over ? game.secret : null,
     history: Array.isArray(game?.history) ? game.history : [],
     ...hintState(game),
+    ...(game?.over ? { stats: gameStats(game), analysis: game.analysis ?? null } : {}),
     message,
   };
 }
@@ -127,11 +129,80 @@ export async function requestHint(env, body) {
   return { status: 200, body: snapshot(game, "не знаю", "Подсказка готова. Вопросы не потрачены") };
 }
 
+function analysisReply(game, cached = true) {
+  return { status: 200, body: { analysis: game.analysis, cached } };
+}
+
+function analysisPending(game) {
+  return Boolean(game.analysisPending && Date.now() - game.analysisPending.startedAt < ANALYSIS_PENDING_MS);
+}
+
+function pendingReply(stats) {
+  return { status: 202, body: { pending: true, stats, message: "Разбор уже готовится. Проверь его чуть позже" } };
+}
+
+export async function requestAnalysis(env, body) {
+  const gameId = body?.gameId;
+  if (typeof gameId !== "string" || !gameId.trim()) {
+    return { status: 400, body: { message: "Сначала сыграй партию" } };
+  }
+  const game = await getGame(env, gameId);
+  if (!game) return { status: 404, body: { message: "Игра не найдена. Начни новую партию" } };
+  if (!game.over) return { status: 409, body: { message: "Разбор появится после окончания игры" } };
+  if (game.analysis) return analysisReply(game);
+  const stats = gameStats(game);
+  if (!stats.turns) return { status: 409, body: { stats, message: "В этой партии ещё нет вопросов для разбора" } };
+  if (analysisPending(game)) return pendingReply(stats);
+  if (!hasAIKey(env)) {
+    return { status: 503, body: { stats, message: "Разбор сейчас недоступен. Можно начать новую игру" } };
+  }
+
+  // Claim this analysis before asking the model, including across server instances.
+  // The lease expires if the worker stops before completing or releasing it.
+  game.analysisPending = { startedAt: Date.now() };
+  try {
+    await saveGame(env, gameId, game, game.version ?? 0);
+  } catch (error) {
+    if (!(error instanceof StoreConflictError)) throw error;
+    const current = await getGame(env, gameId);
+    if (current?.analysis) return analysisReply(current);
+    if (current && analysisPending(current)) return pendingReply(gameStats(current));
+    throw error;
+  }
+  game.version = (game.version ?? 0) + 1;
+  try {
+    const analysis = await generateAnalysis(env, game, stats);
+    game.analysis = analysis;
+    delete game.analysisPending;
+    await saveGame(env, gameId, game, game.version);
+    return analysisReply(game, false);
+  } catch (error) {
+    // Failed/invalid responses must not become a cached result or block retries.
+    delete game.analysis;
+    delete game.analysisPending;
+    try {
+      await saveGame(env, gameId, game, game.version);
+    } catch (cleanupError) {
+      if (!(cleanupError instanceof StoreConflictError) && !(cleanupError instanceof StoreError)) throw cleanupError;
+    }
+    if (error instanceof StoreConflictError) {
+      const current = await getGame(env, gameId);
+      if (current?.analysis) return analysisReply(current);
+    }
+    if (!(error instanceof AIError)) throw error;
+    const message = error.code === "rate_limit"
+      ? "ИИ занят. Попробуй разобрать игру немного позже"
+      : "Не удалось подготовить разбор. Попробуй ещё раз";
+    return { status: 503, body: { stats, message } };
+  }
+}
+
 export async function runGameAction(action, env, body) {
   try {
     if (action === "new") return await newGame(env);
     if (action === "ask") return await askQuestion(env, body);
     if (action === "hint") return await requestHint(env, body);
+    if (action === "analysis") return await requestAnalysis(env, body);
     return { status: 404, body: { message: "Not found" } };
   } catch (error) {
     if (error instanceof StoreConflictError) {
@@ -141,7 +212,9 @@ export async function runGameAction(action, env, body) {
     console.error(`[game:${action}] ${error instanceof StoreError ? "storage_unavailable" : "internal_error"}`);
     return {
       status: error instanceof StoreError ? 503 : 500,
-      body: action === "hint"
+      body: action === "analysis"
+        ? { message: "Не удалось сохранить разбор. Попробуй открыть его позже" }
+        : action === "hint"
         ? { message: "Не удалось сохранить подсказку. Попробуй ещё раз" }
         : action === "new"
         ? { gameId: null, left: DEFAULT_LEFT, message: "Сервис занят, попробуй ещё раз" }
