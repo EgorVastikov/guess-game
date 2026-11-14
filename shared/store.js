@@ -2,6 +2,23 @@ import { GAME_TTL_SECONDS, STORE_TIMEOUT_MS, setting } from "./config.js";
 
 const memory = new Map();
 
+// Compare the revision and write in a single operation across all instances.
+const SAVE_IF_CURRENT = `
+local raw = redis.call('GET', KEYS[1])
+if not raw then return 0 end
+local current = cjson.decode(raw)
+if tonumber(current.version or 0) ~= tonumber(ARGV[1]) then return 0 end
+redis.call('SET', KEYS[1], ARGV[2], 'EX', ARGV[3])
+return 1
+`;
+
+export class StoreConflictError extends Error {
+  constructor() {
+    super("Game was changed by another request");
+    this.name = "StoreConflictError";
+  }
+}
+
 export class StoreError extends Error {
   constructor() {
     super("Game storage unavailable");
@@ -63,11 +80,19 @@ export async function getGame(env, gameId) {
   return structuredClone(entry.game);
 }
 
-export async function saveGame(env, gameId, game) {
+export async function saveGame(env, gameId, game, expectedVersion) {
   const key = `game:${gameId}`;
+  const conditional = expectedVersion !== undefined;
+  const next = conditional ? { ...game, version: expectedVersion + 1 } : game;
   if (storeKind(env) === "upstash") {
+    if (conditional) {
+      const result = await redis(env, ["EVAL", SAVE_IF_CURRENT, 1, key, expectedVersion, JSON.stringify(next), GAME_TTL_SECONDS]);
+      if (result === 0) throw new StoreConflictError();
+      if (result !== 1) throw new StoreError();
+      return;
+    }
     // One atomic Redis command sets both the data and its expiration.
-    const result = await redis(env, ["SET", key, JSON.stringify(game), "EX", GAME_TTL_SECONDS]);
+    const result = await redis(env, ["SET", key, JSON.stringify(next), "EX", GAME_TTL_SECONDS]);
     if (result !== "OK") throw new StoreError();
     return;
   }
@@ -75,5 +100,7 @@ export async function saveGame(env, gameId, game) {
   for (const [storedKey, entry] of memory) {
     if (entry.expiresAt <= now) memory.delete(storedKey);
   }
-  memory.set(key, { game: structuredClone(game), expiresAt: now + GAME_TTL_SECONDS * 1000 });
+  const current = memory.get(key);
+  if (conditional && (!current || (current.game.version ?? 0) !== expectedVersion)) throw new StoreConflictError();
+  memory.set(key, { game: structuredClone(next), expiresAt: now + GAME_TTL_SECONDS * 1000 });
 }

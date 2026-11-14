@@ -315,5 +315,9 @@ test("Node HTTP server serves the UI and a complete API round trip", { timeout: 
   assert.equal(asked.status, 200);
   assert.equal((await asked.json()).left, created.left - 1);
   assert.equal((await fetch(`${base}/api/new`)).status, 405);
+  assert.equal((await fetch(`${base}/api/hint`)).status, 405);
+  assert.equal((await fetch(`${base}/api/hint`, {
+    method: "POST", body: JSON.stringify({ gameId: created.gameId }),
+  })).status, 503);
   assert.equal((await fetch(`${base}/api/missing`, { method: "POST", body: "{}" })).status, 404);
 });

@@ -166,6 +166,47 @@
         box-shadow: 0 12px 24px rgba(168, 85, 247, 0.5);
       }
 
+      .game-controls {
+        display: grid;
+        gap: 12px;
+      }
+
+      .btn.hint {
+        background: #eff6ff;
+        border-color: #93c5fd;
+        color: #1e40af;
+        font-size: 17px;
+        box-shadow: 0 3px 10px rgba(59, 130, 246, 0.15);
+      }
+
+      .btn.hint:disabled { background: #e2e8f0; }
+
+      .hint-info {
+        margin: 10px 0;
+        color: #475569;
+        font-size: 14px;
+        line-height: 1.5;
+      }
+
+      .hint-list {
+        margin: 12px 0;
+        padding: 0;
+        list-style: none;
+        display: grid;
+        gap: 10px;
+      }
+
+      .hint-list li {
+        padding: 12px 14px;
+        border: 2px solid #bfdbfe;
+        border-radius: 14px;
+        background: #eff6ff;
+        color: #1e40af;
+        font-weight: 700;
+        line-height: 1.5;
+        overflow-wrap: anywhere;
+      }
+
       .pill {
         display: inline-flex;
         align-items: center;
@@ -533,9 +574,17 @@
             <div class="chips" id="chips"></div>
 
             <div style="height: 12px"></div>
-            <button class="btn secondary" id="askBtn" disabled>Спросить</button>
+            <div class="game-controls">
+              <button class="btn secondary" id="askBtn" disabled>Спросить</button>
+              <button class="btn hint" id="hintBtn" disabled aria-describedby="hintInfo">Подсказка</button>
+            </div>
+            <div class="hint-info" id="hintInfo">
+              Подсказок использовано: <span id="hintsUsed">0</span> из <span id="hintLimit">2</span>.
+              Вопросы не тратятся.
+            </div>
+            <ol class="hint-list" id="hints" aria-label="Полученные подсказки" aria-live="polite"></ol>
             <div style="height: 8px"></div>
-            <div class="muted" id="status"></div>
+            <div class="muted" id="status" role="status"></div>
           </div>
 
           <div>
@@ -578,9 +627,12 @@
       let over = false;
       let history = [];
       let isBusy = false;
+      let hintsLeft = 2;
+      let noHintDirections = false;
 
       const NEW_GAME_TEXT = "Новая игра";
       const ASK_TEXT = "Спросить";
+      const HINT_TEXT = "Подсказка";
 
       function setStatus(text) {
         $("status").textContent = text || "";
@@ -614,6 +666,21 @@
         });
       }
 
+      function renderHints(data = {}) {
+        const hints = Array.isArray(data.hints) ? data.hints : [];
+        const limit = Number(data.hintLimit ?? 2);
+        hintsLeft = Number(data.hintsLeft ?? Math.max(0, limit - hints.length));
+        $("hintsUsed").textContent = String(data.hintsUsed ?? hints.length);
+        $("hintLimit").textContent = String(limit);
+        const root = $("hints");
+        root.replaceChildren();
+        hints.forEach((hint, index) => {
+          const item = document.createElement("li");
+          item.textContent = `${index + 1}. ${hint.text}`;
+          root.appendChild(item);
+        });
+      }
+
       function setResult(over, win, secret) {
         const title = $("finalTitle");
         const el = $("result");
@@ -643,6 +710,7 @@
       function updateAskEnabled() {
         const hasQuestion = $("question").value.trim().length > 0;
         $("askBtn").disabled = isBusy || !gameId || !hasQuestion || over;
+        $("hintBtn").disabled = isBusy || !gameId || over || hintsLeft <= 0 || noHintDirections;
         $("newGameBtn").disabled = isBusy;
       }
 
@@ -651,12 +719,15 @@
         if (isBusy) {
           if (label === "new") {
             $("newGameBtn").textContent = "Начинаю...";
+          } else if (label === "hint") {
+            $("hintBtn").textContent = "Ищу подсказку...";
           } else {
             $("askBtn").textContent = "Думаю...";
           }
         } else {
           $("newGameBtn").textContent = NEW_GAME_TEXT;
           $("askBtn").textContent = ASK_TEXT;
+          $("hintBtn").textContent = HINT_TEXT;
         }
         updateAskEnabled();
       }
@@ -685,6 +756,7 @@
             const msg = data?.message || "Сервис занят, попробуй ещё раз";
             const e = new Error(msg);
             e.status = res.status;
+            e.data = data;
             throw e;
           }
           return data;
@@ -694,6 +766,7 @@
       }
 
       async function startGame() {
+        if (isBusy) return;
         setStatus("Начинаю игру...");
         setBusy(true, "new");
 
@@ -703,6 +776,8 @@
           gameId = data.gameId;
           over = false;
           history = Array.isArray(data.history) ? data.history : [];
+          noHintDirections = false;
+          renderHints(data);
 
           setLeft(data.left);
           setAnswer("не знаю");
@@ -715,6 +790,8 @@
           gameId = null;
           over = false;
           history = [];
+          noHintDirections = false;
+          renderHints();
           renderHistory(history);
           setAnswer("не знаю");
           setResult(false, false, null);
@@ -738,6 +815,7 @@
       }
 
       async function onAskClick() {
+        if (isBusy) return;
         const question = $("question").value.trim();
         if (!question) return;
         if (!gameId) {
@@ -756,6 +834,7 @@
 
           history = data.history || [];
           renderHistory(history);
+          renderHints(data);
 
           over = Boolean(data.over);
           if (over) {
@@ -778,6 +857,37 @@
 
         $("question").focus();
         setBusy(false);
+      }
+
+      async function onHintClick() {
+        if (isBusy || !gameId || over || hintsLeft <= 0 || noHintDirections) return;
+        setStatus("Ищу полезную подсказку...");
+        setBusy(true, "hint");
+        try {
+          const data = await apiPost("/api/hint", { gameId });
+          renderHints(data);
+          // A hint never replaces the last answer or edits the question input.
+          setStatus(data.message || "Подсказка готова");
+        } catch (e) {
+          if (Array.isArray(e?.data?.hints)) {
+            renderHints(e.data);
+            over = Boolean(e.data.over);
+            setLeft(e.data.left);
+            history = e.data.history || [];
+            renderHistory(history);
+            setResult(over, Boolean(e.data.win), e.data.secret);
+          }
+          if (e?.data?.code === "no_hint_directions") noHintDirections = true;
+          if (e?.name === "AbortError") {
+            setStatus("Подсказка не успела прийти. Можно продолжить игру или попробовать ещё раз");
+          } else if (isNetworkError(e)) {
+            setStatus("Нет интернета. Твой вопрос и подсказки сохранены на странице");
+          } else {
+            setStatus(e?.message || "Подсказка недоступна. Можно продолжить игру");
+          }
+        } finally {
+          setBusy(false);
+        }
       }
 
       function escapeHtml(s) {
@@ -809,6 +919,7 @@
 
       $("newGameBtn").addEventListener("click", startGame);
       $("askBtn").addEventListener("click", onAskClick);
+      $("hintBtn").addEventListener("click", onHintClick);
       $("question").addEventListener("input", updateAskEnabled);
       $("question").addEventListener("keydown", (e) => {
         if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {

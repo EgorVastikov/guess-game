@@ -1,6 +1,7 @@
 import { ASK_INTERVAL_MS } from "./config.js";
 import { AIError, hasAIKey, requestAI } from "./ai.js";
-import { getGame, saveGame, StoreError } from "./store.js";
+import { getGame, saveGame, StoreError, StoreConflictError } from "./store.js";
+import { chooseHint, hintCandidates, hintState } from "./hints.js";
 import {
   DEFAULT_LEFT, normalize, pickSecret, isHard, getCategoryHint,
   extractGuessCandidate, isExactGuess, answerFromFeatures, safeAnswer,
@@ -14,6 +15,7 @@ function snapshot(game, answer = "не знаю", message = "") {
     win: Boolean(game?.win),
     secret: game?.over ? game.secret : null,
     history: Array.isArray(game?.history) ? game.history : [],
+    ...hintState(game),
     message,
   };
 }
@@ -24,10 +26,10 @@ export async function newGame(env) {
   const gameId = `game_${globalThis.crypto.randomUUID()}`;
   const game = {
     gameId, secret, left: hard ? 15 : DEFAULT_LEFT, isHard: hard,
-    over: false, win: false, history: [], createdAt: Date.now(), lastAskAt: 0,
+    over: false, win: false, history: [], hints: [], version: 0, createdAt: Date.now(), lastAskAt: 0,
   };
   await saveGame(env, gameId, game);
-  return { status: 200, body: { gameId, left: game.left, isHard: hard, message: "Игра началась" } };
+  return { status: 200, body: { gameId, left: game.left, isHard: hard, ...hintState(game), message: "Игра началась" } };
 }
 
 export async function askQuestion(env, body) {
@@ -83,21 +85,65 @@ export async function askQuestion(env, body) {
   } else if (!game.over && game.left <= 3 && !message) {
     message = `Осталось мало вопросов! Подсказка: ${getCategoryHint(game.secret)}`;
   }
-  await saveGame(env, gameId, game);
+  await saveGame(env, gameId, game, game.version ?? 0);
   return { status: 200, body: snapshot(game, answer, message) };
+}
+
+export async function requestHint(env, body) {
+  const gameId = body?.gameId;
+  if (typeof gameId !== "string" || !gameId.trim()) {
+    return { status: 400, body: { message: "Сначала начни новую игру" } };
+  }
+  const game = await getGame(env, gameId);
+  if (!game) return { status: 404, body: { message: "Игра не найдена. Нажми 'Новая игра'." } };
+  if (game.over) {
+    return { status: 409, body: snapshot(game, "не знаю", "Игра окончена. Начни новую, чтобы получить подсказку") };
+  }
+  if (hintState(game).hintsLeft === 0) {
+    return { status: 409, body: snapshot(game, "не знаю", "Все подсказки в этой игре уже использованы") };
+  }
+  const candidates = hintCandidates(game);
+  if (!candidates.length) {
+    return { status: 409, body: {
+      ...snapshot(game, "не знаю", "Все направления уже проверены. Попробуй угадать!"),
+      code: "no_hint_directions",
+    } };
+  }
+  if (!hasAIKey(env)) {
+    return { status: 503, body: { message: "Подсказки сейчас недоступны. Можно продолжить задавать вопросы" } };
+  }
+  let hint;
+  try {
+    hint = await chooseHint(env, game, candidates);
+  } catch (error) {
+    if (!(error instanceof AIError)) throw error;
+    const message = error.code === "rate_limit"
+      ? "ИИ занят. Подожди немного и попробуй получить подсказку ещё раз"
+      : "Не удалось получить подсказку. Попробуй ещё раз или продолжай игру";
+    return { status: 503, body: { message } };
+  }
+  game.hints = [...(game.hints ?? []), hint];
+  await saveGame(env, gameId, game, game.version ?? 0);
+  return { status: 200, body: snapshot(game, "не знаю", "Подсказка готова. Вопросы не потрачены") };
 }
 
 export async function runGameAction(action, env, body) {
   try {
     if (action === "new") return await newGame(env);
     if (action === "ask") return await askQuestion(env, body);
+    if (action === "hint") return await requestHint(env, body);
     return { status: 404, body: { message: "Not found" } };
   } catch (error) {
+    if (error instanceof StoreConflictError) {
+      return { status: 409, body: { message: "Игра уже изменилась. Повтори действие" } };
+    }
     // Log only the error category; questions, secrets and API tokens stay out of logs.
     console.error(`[game:${action}] ${error instanceof StoreError ? "storage_unavailable" : "internal_error"}`);
     return {
       status: error instanceof StoreError ? 503 : 500,
-      body: action === "new"
+      body: action === "hint"
+        ? { message: "Не удалось сохранить подсказку. Попробуй ещё раз" }
+        : action === "new"
         ? { gameId: null, left: DEFAULT_LEFT, message: "Сервис занят, попробуй ещё раз" }
         : snapshot(null, "не знаю", "Сервис занят, попробуй ещё раз"),
     };
