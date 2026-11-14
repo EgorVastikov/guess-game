@@ -30,10 +30,13 @@ async function callPages(body, settings = env, method = "POST", handler = pagesH
 }
 
 async function callNode(body, settings = env, method = "POST") {
-  const keys = ["STORE_KIND", "OPENROUTER_API_KEY", "MODEL_HINT"];
+  const keys = ["STORE_KIND", "OPENROUTER_API_KEY", "MODEL_HINT", "AI_PROVIDER", "OPENROUTER_BASE_URL"];
   const original = Object.fromEntries(keys.map(key => [key, process.env[key]]));
   try {
-    for (const key of keys) process.env[key] = settings[key] ?? "";
+    for (const key of keys) {
+      if (settings[key] === undefined) delete process.env[key];
+      else process.env[key] = settings[key];
+    }
     let result;
     await nodeHint({ method, body }, { statusCode: 200, json(body) { result = { status: this.statusCode, body }; } });
     return result;

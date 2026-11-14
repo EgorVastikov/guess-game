@@ -116,7 +116,9 @@ export function createDrawingController({ $, apiPost, setBusy, isBusy, updateCon
     status("ИИ рассматривает рисунок...");
     try {
       const imageDataUrl = canvas.toDataURL("image/png");
-      const data = await apiPost("/api/draw", { gameId: drawingGameId, imageDataUrl }, 30000);
+      // Local vision may spend up to 30 seconds loading and running the model;
+      // leave room for the store read/write and HTTP transport as well.
+      const data = await apiPost("/api/draw", { gameId: drawingGameId, imageDataUrl }, 45000);
       guessedRevision = revision;
       renderGame(data);
     } catch (error) { showError(error); }

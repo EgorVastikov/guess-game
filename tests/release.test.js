@@ -67,7 +67,7 @@ test("static server refuses malformed paths and paths into similarly named sibli
   fs.writeFileSync(probe, "private sibling content");
   t.after(() => { fs.unlinkSync(probe); fs.rmdirSync(sibling); });
   const child = spawn(process.execPath, ["dev-local.js"], {
-    cwd: root, env: { ...process.env, ...env, PORT: "0" }, stdio: ["ignore", "pipe", "pipe"],
+    cwd: root, env: { ...process.env, ...env, PORT: "0", AI_PROVIDER: "openrouter", OPENROUTER_BASE_URL: "https://router.invalid/v1" }, stdio: ["ignore", "pipe", "pipe"],
   });
   t.after(async () => {
     if (child.exitCode === null) {

@@ -1,4 +1,5 @@
 export const DEFAULT_MODEL = "nvidia/nemotron-3.5-super-vl:free";
+export const DEFAULT_OLLAMA_MODEL = "gemma4:e2b";
 export const STORE_TIMEOUT_MS = 2500;
 export const GAME_TTL_SECONDS = 60 * 60;
 export const ASK_INTERVAL_MS = 700;
@@ -15,9 +16,25 @@ export const AI_TASKS = Object.freeze({
   answer: Object.freeze({ modelEnv: "MODEL", maxTokens: 32, timeoutMs: 9000 }),
   hint: Object.freeze({ modelEnv: "MODEL_HINT", maxTokens: 160, timeoutMs: 9000 }),
   analysis: Object.freeze({ modelEnv: "MODEL_ANALYSIS", maxTokens: 1000, timeoutMs: 15000 }),
-  vision: Object.freeze({ modelEnv: "MODEL_VISION", maxTokens: 256, timeoutMs: 15000 }),
+  // Allow room for three Russian names plus a question, including JSON syntax.
+  // Local vision also needs time to load the model and image encoder on first use.
+  vision: Object.freeze({ modelEnv: "MODEL_VISION", maxTokens: 512, timeoutMs: 15000, ollamaTimeoutMs: 30000 }),
 });
 
 export function setting(env, name, fallback = "") {
   return String(env?.[name] ?? "").trim() || fallback;
+}
+
+export function aiConnection(env) {
+  const selected = setting(env, "AI_PROVIDER", "auto").toLowerCase();
+  if (!["auto", "openrouter", "ollama"].includes(selected)) throw new Error("Unknown AI_PROVIDER");
+  const baseUrl = setting(env, "OPENROUTER_BASE_URL", selected === "ollama"
+    ? "http://127.0.0.1:11434/v1" : "https://openrouter.ai/api/v1").replace(/\/$/, "");
+  const url = new URL(baseUrl);
+  const provider = selected === "auto" ? (url.port === "11434" || url.hostname === "ollama" ? "ollama" : "openrouter") : selected;
+  return {
+    provider, baseUrl,
+    apiKey: setting(env, "OPENROUTER_API_KEY", provider === "ollama" ? "ollama" : ""),
+    defaultModel: provider === "ollama" ? DEFAULT_OLLAMA_MODEL : DEFAULT_MODEL,
+  };
 }

@@ -39,7 +39,7 @@ async function callPages(body, settings = env, method = "POST", handler = pagesA
 }
 
 async function callNode(body, settings = env, method = "POST") {
-  const keys = ["STORE_KIND", "OPENROUTER_API_KEY", "MODEL_ANALYSIS"];
+  const keys = ["STORE_KIND", "OPENROUTER_API_KEY", "MODEL_ANALYSIS", "AI_PROVIDER", "OPENROUTER_BASE_URL"];
   const previous = Object.fromEntries(keys.map(key => [key, process.env[key]]));
   try {
     for (const key of keys) process.env[key] = settings[key] ?? "";
@@ -298,7 +298,7 @@ test("HTTP analysis round trip saves and reuses a report through a local AI serv
   });
   const child = spawn(process.execPath, ["--input-type=module", "-e", "Math.random = () => 0; await import('./dev-local.js');"], {
     cwd: new URL("..", import.meta.url),
-    env: { ...process.env, ...env, PORT: "0", OPENROUTER_BASE_URL: `http://127.0.0.1:${aiServer.address().port}` },
+    env: { ...process.env, ...env, PORT: "0", AI_PROVIDER: "openrouter", OPENROUTER_BASE_URL: `http://127.0.0.1:${aiServer.address().port}` },
     stdio: ["ignore", "pipe", "pipe"],
   });
   t.after(async () => {

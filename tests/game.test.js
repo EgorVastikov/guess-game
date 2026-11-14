@@ -19,7 +19,7 @@ const redisEnv = {
 };
 
 async function callNode(action, body, env = memoryEnv, method = "POST") {
-  const keys = ["STORE_KIND", "OPENROUTER_API_KEY", "UPSTASH_REDIS_REST_URL", "UPSTASH_REDIS_REST_TOKEN", "MODEL"];
+  const keys = ["STORE_KIND", "OPENROUTER_API_KEY", "UPSTASH_REDIS_REST_URL", "UPSTASH_REDIS_REST_TOKEN", "MODEL", "AI_PROVIDER", "OPENROUTER_BASE_URL"];
   const previous = Object.fromEntries(keys.map(key => [key, process.env[key]]));
   try {
     for (const key of keys) {
@@ -287,7 +287,7 @@ test("memory reads are isolated and expired games cannot be resumed", async t =>
 test("Node HTTP server serves the UI and a complete API round trip", { timeout: 10000 }, async t => {
   const child = spawn(process.execPath, ["dev-local.js"], {
     cwd: new URL("..", import.meta.url),
-    env: { ...process.env, ...memoryEnv, PORT: "0" },
+    env: { ...process.env, ...memoryEnv, PORT: "0", AI_PROVIDER: "openrouter", OPENROUTER_BASE_URL: "https://router.invalid/v1" },
     stdio: ["ignore", "pipe", "pipe"],
   });
   t.after(async () => {

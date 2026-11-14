@@ -1,4 +1,4 @@
-import { AIError, hasAIKey, requestAI } from "./ai.js";
+import { AIError, hasAIKey, logAIFailure, requestAI } from "./ai.js";
 import { getGame, saveGame } from "./store.js";
 import { validateDrawingImage } from "./image-input.js";
 
@@ -56,12 +56,22 @@ export async function guessDrawing(env, body) {
   let guess;
   try {
     // Explicit whitelist: neither a supplied secret nor word-game history reaches vision.
-    guess = parseGuess(await requestAI(env, "vision", { imageDataUrl: body.imageDataUrl }));
+    const raw = await requestAI(env, "vision", { imageDataUrl: body.imageDataUrl });
+    try { guess = parseGuess(raw); }
+    catch (error) {
+      if (error instanceof AIError) logAIFailure(env, "vision", error);
+      throw error;
+    }
   } catch (error) {
     if (!(error instanceof AIError)) throw error;
-    return { status: 503, body: { message: error.code === "rate_limit"
-      ? "ИИ занят. Подожди немного и отправь рисунок ещё раз"
-      : "Не удалось угадать рисунок. Дорисуй детали или попробуй ещё раз" } };
+    const messages = {
+      rate_limit: "ИИ занят. Подожди немного и отправь рисунок ещё раз",
+      truncated_response: "Ответ ИИ оборвался. Рисунок остаётся на странице — нажми «Угадай» ещё раз",
+      invalid_response: "ИИ вернул ответ в неверном формате. Рисунок остаётся на странице — попробуй ещё раз",
+      timeout: "ИИ не успел ответить. Рисунок остаётся на странице — попробуй ещё раз",
+    };
+    return { status: 503, body: { code: error.code, message: messages[error.code]
+      ?? "Не удалось связаться с ИИ. Рисунок остаётся на странице — попробуй позже" } };
   }
   game.latestAttempt = { id: crypto.randomUUID(), ...guess, feedback: null, createdAt: Date.now() };
   game.attemptsUsed = (game.attemptsUsed ?? 0) + 1;

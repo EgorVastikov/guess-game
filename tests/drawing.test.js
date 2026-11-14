@@ -22,7 +22,7 @@ const nodeHandlers = { new: nodeNew, draw: nodeDraw, confirm: nodeConfirm };
 const pageHandlers = { new: pagesNew, draw: pagesDraw, confirm: pagesConfirm, ask: pagesAsk, hint: pagesHint, analysis: pagesAnalysis };
 
 async function callNode(action, body, settings = env, method = "POST") {
-  const keys = ["STORE_KIND", "OPENROUTER_API_KEY", "MODEL_VISION"];
+  const keys = ["STORE_KIND", "OPENROUTER_API_KEY", "MODEL_VISION", "AI_PROVIDER", "OPENROUTER_BASE_URL"];
   const previous = Object.fromEntries(keys.map(key => [key, process.env[key]]));
   try {
     for (const key of keys) process.env[key] = settings[key] ?? "";
@@ -150,7 +150,41 @@ for (const [platform, call] of [["Node", callNode], ["Pages", callPages]]) {
       assert.deepEqual(await getGame(env, gameId), original);
     }
   });
+
+  test(`${platform}: service failures have distinct error codes and preserve the last guess`, async t => {
+    const fetchMock = t.mock.method(globalThis, "fetch", async () => reply());
+    const created = await call("new", { mode: "drawing" });
+    const gameId = created.body.gameId;
+    assert.equal((await call("draw", { gameId, imageDataUrl: IMAGE })).status, 200);
+    const original = await getGame(env, gameId);
+    const failures = [
+      ["truncated_response", "оборвался", () => Response.json({ choices: [{ finish_reason: "length", message: { content: '{"guesses":[' } }] })],
+      ["invalid_response", "неверном формате", () => reply({ guesses: ["x".repeat(81)], question: null })],
+      ["rate_limit", "занят", () => new Response("{}", { status: 429 })],
+      ["unavailable", "связаться", () => { throw new TypeError("Network unavailable"); }],
+    ];
+    for (const [code, message, respond] of failures) {
+      fetchMock.mock.mockImplementation(async () => respond());
+      const result = await call("draw", { gameId, imageDataUrl: IMAGE });
+      assert.equal(result.status, 503);
+      assert.equal(result.body.code, code);
+      assert.ok(result.body.message.includes(message));
+      assert.deepEqual(await getGame(env, gameId), original);
+    }
+  });
 }
+
+test("Ollama logs invalid drawing content without exposing the response or image", async t => {
+  const warnings = [];
+  t.mock.method(console, "warn", value => warnings.push(value));
+  t.mock.method(globalThis, "fetch", async () => reply('PRIVATE_INVALID_CONTENT'));
+  const settings = { STORE_KIND: "memory", AI_PROVIDER: "ollama", OPENROUTER_API_KEY: "PRIVATE_KEY" };
+  const created = await callPages("new", { mode: "drawing" }, settings);
+  const result = await callPages("draw", { gameId: created.body.gameId, imageDataUrl: IMAGE }, settings);
+  assert.equal(result.body.code, "invalid_response");
+  assert.deepEqual(warnings, ["[ai:vision] provider=ollama code=invalid_response"]);
+  assert.equal((await getGame(settings, created.body.gameId)).attemptsUsed, 0);
+});
 
 test("word and drawing endpoints reject each other's game identifiers", async () => {
   const drawing = await callPages("new", { mode: "drawing" });
@@ -213,7 +247,7 @@ test("HTTP drawing round trip supports rejection, redraw and confirmation", { ti
   await new Promise(resolve => aiServer.listen(0, "127.0.0.1", resolve));
   t.after(async () => { aiServer.closeAllConnections(); await new Promise(resolve => aiServer.close(resolve)); });
   const child = spawn(process.execPath, ["dev-local.js"], {
-    cwd: new URL("..", import.meta.url), env: { ...process.env, ...env, PORT: "0", OPENROUTER_BASE_URL: `http://127.0.0.1:${aiServer.address().port}` },
+    cwd: new URL("..", import.meta.url), env: { ...process.env, ...env, PORT: "0", AI_PROVIDER: "openrouter", OPENROUTER_BASE_URL: `http://127.0.0.1:${aiServer.address().port}` },
     stdio: ["ignore", "pipe", "pipe"],
   });
   t.after(async () => { if (child.exitCode === null) { const stopped = once(child, "exit"); child.kill(); await stopped; } });
