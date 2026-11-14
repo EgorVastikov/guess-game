@@ -6,7 +6,7 @@ import nodeNew from "../api/new.js";
 import nodeAsk from "../api/ask.js";
 import { onRequest as pagesNew } from "../functions/api/new.js";
 import { onRequest as pagesAsk } from "../functions/api/ask.js";
-import { AI_TASKS, DEFAULT_MODEL, GAME_TTL_SECONDS, STORE_TIMEOUT_MS } from "../shared/config.js";
+import { AI_TASKS, OPENROUTER_MODEL, GAME_TTL_SECONDS, STORE_TIMEOUT_MS } from "../shared/config.js";
 import { AIError, requestAI } from "../shared/ai.js";
 import { buildMessages } from "../shared/prompts.js";
 import { getGame, saveGame, storeKind, StoreError } from "../shared/store.js";
@@ -161,7 +161,7 @@ for (const [platform, call] of [["Node", callNode], ["Pages", callPages]]) {
   });
 }
 
-test("OpenRouter gets the configured model, answer budget, disabled reasoning and six recent turns", async t => {
+test("OpenRouter gets the fixed model, answer budget, disabled reasoning and six recent turns", async t => {
   let sent;
   t.mock.method(globalThis, "fetch", async (url, options) => {
     sent = { url, ...options, payload: JSON.parse(options.body) };
@@ -176,24 +176,24 @@ test("OpenRouter gets the configured model, answer budget, disabled reasoning an
   assert.equal(result.status, 200);
   assert.equal(result.body.answer, "да");
   assert.equal(sent.url, "https://router.example.test/v1/chat/completions");
-  assert.equal(sent.payload.model, "test/model");
+  assert.equal(sent.payload.model, OPENROUTER_MODEL);
   assert.equal(sent.payload.max_tokens, AI_TASKS.answer.maxTokens);
   assert.deepEqual(sent.payload.reasoning, { enabled: false });
   assert.deepEqual(JSON.parse(sent.payload.messages[1].content).history, history.slice(-6));
   assert.equal(sent.signal.aborted, false);
 });
 
-test("AI tasks use separate instructions/budgets and model overrides", async t => {
+test("AI tasks use separate instructions/budgets and the fixed OpenRouter model", async t => {
   const payloads = [];
   t.mock.method(globalThis, "fetch", async (_, options) => {
     payloads.push(JSON.parse(options.body));
     return Response.json({ choices: [{ message: { content: "Тестовый ответ" } }] });
   });
-  const env = { OPENROUTER_API_KEY: "test", MODEL_HINT: "hint/model", MODEL: " " };
+  const env = { OPENROUTER_API_KEY: "test", MODEL: "legacy/model", MODEL_HINT: "legacy/hint", MODEL_ANALYSIS: "legacy/analysis", MODEL_VISION: "legacy/vision" };
   for (const task of Object.keys(AI_TASKS)) {
     await requestAI(env, task, { secret: "hidden-answer", question: "test", history: [], imageDataUrl: "data:image/png;base64,AAAA" });
   }
-  assert.deepEqual(payloads.map(p => p.model), [DEFAULT_MODEL, "hint/model", DEFAULT_MODEL, DEFAULT_MODEL]);
+  assert.deepEqual(payloads.map(p => p.model), Array(4).fill(OPENROUTER_MODEL));
   assert.equal(new Set(payloads.map(p => p.messages[0].content)).size, 4);
   assert.deepEqual(payloads.map(p => p.max_tokens), Object.values(AI_TASKS).map(config => config.maxTokens));
   const vision = JSON.stringify(payloads[3].messages);
