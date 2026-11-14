@@ -1,0 +1,11 @@
+.git
+.github
+.env
+.env.*
+.dev.vars
+.dev.vars.*
+node_modules
+.wrangler
+md_files
+tests
+scripts

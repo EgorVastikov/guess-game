@@ -4,11 +4,14 @@
   "version": "1.0.0",
   "description": "Kid-friendly guess game (static UI + API) with OpenRouter LLM",
   "main": "dev-local.js",
-  "type": "commonjs",
+  "type": "module",
   "engines": {
-    "node": ">=18"
+    "node": ">=22"
   },
   "scripts": {
-    "start": "node dev-local.js"
+    "start": "node dev-local.js",
+    "test": "node --test",
+    "check": "node scripts/check.mjs",
+    "verify": "npm run check && npm test"
   }
 }

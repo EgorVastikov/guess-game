@@ -8,11 +8,11 @@ services:
     healthCheckPath: /
     envVars:
       - key: NODE_VERSION
-        value: 20
+        value: 22
       - key: OPENROUTER_API_KEY
         sync: false
       - key: MODEL
-        value: meta-llama/llama-3.3-8b-instruct:free
+        value: nvidia/nemotron-3.5-super-vl:free
       - key: OPENROUTER_BASE_URL
         value: https://openrouter.ai/api/v1
       - key: STORE_KIND
