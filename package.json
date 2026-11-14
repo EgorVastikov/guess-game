@@ -6,10 +6,12 @@
   "main": "dev-local.js",
   "type": "module",
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
   },
   "scripts": {
     "start": "node dev-local.js",
-    "test": "node --test"
+    "test": "node --test",
+    "check": "node scripts/check.mjs",
+    "verify": "npm run check && npm test"
   }
 }

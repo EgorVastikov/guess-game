@@ -67,6 +67,8 @@ const SECRETS = [
   "телефон",
 ];
 
+const SECRET_NAMES = makeSet(SECRETS);
+
 function isHard(secret) {
   return HARD_SECRETS.has(normalize(secret));
 }
@@ -375,12 +377,14 @@ function detectIntent(questionNorm) {
 
 function extractGuessCandidate(questionNorm) {
   const q = normalize(questionNorm);
-
-  if (detectIntent(q)) return null;
-
   let rest = q;
   if (rest.startsWith("это ")) rest = rest.slice(4).trim();
   if (!rest) return null;
+
+  // Exact dictionary guesses take priority over overlapping feature stems:
+  // e.g. «белка» contains the color stem «бел», «рыба» is also a category.
+  if (SECRET_NAMES.has(rest)) return rest;
+  if (detectIntent(q)) return null;
 
   const blockers = [
     "больше",

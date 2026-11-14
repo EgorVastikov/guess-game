@@ -78,7 +78,7 @@ export async function askQuestion(env, body) {
           return { status: 503, body: snapshot(game, "не знаю", text) };
         }
       } else {
-        message = "Нужен ключ OPENROUTER_API_KEY";
+        message = "На этот вопрос пока не могу ответить. Попробуй спросить иначе";
       }
     }
   }

@@ -125,6 +125,8 @@
         box-shadow: 0 30px 60px rgba(0, 0, 0, 0.3);
         text-align: center;
         max-width: 500px;
+        max-height: calc(100dvh - 40px);
+        overflow-y: auto;
         margin: 20px;
         animation: popIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
       }
@@ -513,7 +515,7 @@
         padding: 0;
         list-style: none;
         display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+        grid-template-columns: repeat(auto-fill, minmax(min(200px, 100%), 1fr));
         gap: 10px;
       }
       
@@ -567,6 +569,15 @@
             top: 20px;
             align-self: start;
         }
+      }
+
+      @media (max-width: 480px) {
+        .wrap { padding: 10px 0; }
+        .card { padding: 18px; }
+        .title { font-size: 28px; }
+        .btn.big { font-size: 22px; padding: 18px 24px; }
+        .left-count { font-size: 19px; flex-wrap: wrap; }
+        .modal-content { padding: 24px; }
       }
 
     </style>
@@ -1133,20 +1144,29 @@
       setStatus("Нажми 'Новая игра'");
       updateAskEnabled();
       
+      // Storage is optional: private/embedded browser policies may deny access.
+      function hasVisitedBefore() {
+        try { return localStorage.getItem('hasVisited'); } catch { return false; }
+      }
+
+      function rememberVisit() {
+        try { localStorage.setItem('hasVisited', 'true'); } catch { /* Play without saving this preference. */ }
+      }
+
       // Show welcome modal on first visit
-      const hasVisited = localStorage.getItem('hasVisited');
+      const hasVisited = hasVisitedBefore();
       if (!hasVisited) {
         const modal = $("welcomeModal");
         modal.classList.add('show');
         
         $("modalStartBtn").addEventListener("click", () => {
           modal.classList.remove('show');
-          localStorage.setItem('hasVisited', 'true');
+          rememberVisit();
           startGame();
         });
         $("modalDrawBtn").addEventListener("click", () => {
           modal.classList.remove('show');
-          localStorage.setItem('hasVisited', 'true');
+          rememberVisit();
           switchMode("drawing");
         });
         
@@ -1154,7 +1174,7 @@
         modal.addEventListener('click', (e) => {
           if (e.target === modal) {
             modal.classList.remove('show');
-            localStorage.setItem('hasVisited', 'true');
+            rememberVisit();
           }
         });
       } else {

@@ -137,7 +137,8 @@ for (const [platform, call] of [["Node", callNode], ["Pages", callPages]]) {
     assert.equal(result.status, 200);
     assert.equal(result.body.answer, "не знаю");
     assert.equal(result.body.left, 9);
-    assert.match(result.body.message, /OPENROUTER_API_KEY/);
+    assert.match(result.body.message, /Попробуй спросить иначе/);
+    assert.equal(result.body.message.includes("OPENROUTER_API_KEY"), false);
   });
 
   test(`${platform}: upstream quota failure does not change persisted state`, async t => {

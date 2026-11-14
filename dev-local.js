@@ -2,6 +2,7 @@ import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { loadEnvFile } from "node:process";
 
 import apiNew from "./api/new.js";
 import apiAsk from "./api/ask.js";
@@ -12,6 +13,8 @@ import apiConfirm from "./api/confirm.js";
 import { MAX_REQUEST_BYTES } from "./shared/config.js";
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
+const ENV_FILE = path.join(ROOT, ".env");
+if (fs.existsSync(ENV_FILE)) loadEnvFile(ENV_FILE);
 const PUBLIC_DIR = path.join(ROOT, "public");
 
 function send(res, statusCode, body, headers = {}) {
@@ -43,10 +46,12 @@ function contentTypeFor(filePath) {
 }
 
 function safeJoinPublic(urlPath) {
-  const decoded = decodeURIComponent(urlPath);
-  const clean = decoded.replace(/\0/g, "");
-  const filePath = path.normalize(path.join(PUBLIC_DIR, clean));
-  if (!filePath.startsWith(PUBLIC_DIR)) return null;
+  let decoded;
+  try { decoded = decodeURIComponent(urlPath); } catch { return null; }
+  if (decoded.includes("\0")) return null;
+  const filePath = path.normalize(path.join(PUBLIC_DIR, decoded));
+  const relative = path.relative(PUBLIC_DIR, filePath);
+  if (relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) return null;
   return filePath;
 }
 
