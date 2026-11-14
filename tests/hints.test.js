@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import nodeHint from "../api/hint.js";
 import { onRequest as pagesHint } from "../functions/api/hint.js";
 import { onRequest as pagesAsk } from "../functions/api/ask.js";
-import { AI_TASKS, HINT_LIMIT, GAME_TTL_SECONDS } from "../shared/config.js";
+import { AI_TASKS, HINT_LIMIT, GAME_TTL_SECONDS, OPENROUTER_MODEL } from "../shared/config.js";
 import { getGame, saveGame, StoreConflictError } from "../shared/store.js";
 import { hintCandidates } from "../shared/hints.js";
 
@@ -74,7 +74,7 @@ for (const [platform, call] of [["Node", callNode], ["Pages", callPages]]) {
     assert.deepEqual(result.body.history, history);
     assert.deepEqual(result.body.hints, [{ text: "Попробуй узнать, бывает ли это дома." }]);
     assert.equal(JSON.stringify(result.body).includes("кошка"), false);
-    assert.equal(sent.model, "test/hint");
+    assert.equal(sent.model, OPENROUTER_MODEL);
     assert.equal(sent.max_tokens, AI_TASKS.hint.maxTokens);
     const data = JSON.parse(sent.messages[1].content);
     assert.equal(data.secret, "кошка");

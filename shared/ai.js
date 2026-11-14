@@ -1,4 +1,4 @@
-import { AI_TASKS, aiConnection, setting } from "./config.js";
+import { AI_TASKS, aiConnection } from "./config.js";
 import { buildMessages } from "./prompts.js";
 import { responseFormat } from "./ai-schemas.js";
 
@@ -24,9 +24,8 @@ export function logAIFailure(env, task, error) {
 export async function requestAI(env, task, input) {
   const config = AI_TASKS[task];
   if (!config) throw new Error("Unknown AI task");
-  const { provider, baseUrl, apiKey, defaultModel } = aiConnection(env);
+  const { provider, baseUrl, apiKey, model } = aiConnection(env);
   if (!apiKey) throw new AIError("missing_key");
-  const model = setting(env, config.modelEnv, setting(env, "MODEL", defaultModel));
   const format = provider === "ollama" ? responseFormat(task, input) : null;
   const controller = new AbortController();
   const timeoutMs = provider === "ollama" ? config.ollamaTimeoutMs ?? config.timeoutMs : config.timeoutMs;
