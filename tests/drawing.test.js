@@ -12,7 +12,7 @@ import { onRequest as pagesConfirm } from "../functions/api/confirm.js";
 import { onRequest as pagesAsk } from "../functions/api/ask.js";
 import { onRequest as pagesHint } from "../functions/api/hint.js";
 import { onRequest as pagesAnalysis } from "../functions/api/analysis.js";
-import { AI_TASKS, MAX_IMAGE_BYTES, MAX_REQUEST_BYTES } from "../shared/config.js";
+import { AI_TASKS, OPENROUTER_MODEL, MAX_IMAGE_BYTES, MAX_REQUEST_BYTES } from "../shared/config.js";
 import { getGame } from "../shared/store.js";
 
 // A tiny PNG fixture tests image transport, not recognition quality.
@@ -71,7 +71,7 @@ for (const [platform, call] of [["Node", callNode], ["Pages", callPages]]) {
     assert.equal(result.body.attemptsUsed, 1);
     assert.deepEqual(result.body.latestAttempt.guesses, ["кошка", "лиса"]);
     assert.equal(result.body.latestAttempt.feedback, null);
-    assert.equal(sent.model, "test/vision");
+    assert.equal(sent.model, OPENROUTER_MODEL);
     assert.equal(sent.max_tokens, AI_TASKS.vision.maxTokens);
     assert.equal(sent.messages[1].content[1].image_url.url, IMAGE);
     assert.equal(JSON.stringify(sent.messages).includes("FORBIDDEN_SECRET"), false);

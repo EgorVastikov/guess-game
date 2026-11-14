@@ -1,18 +1,18 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { AIError, hasAIKey, requestAI } from "../shared/ai.js";
-import { aiConnection, AI_TASKS, DEFAULT_MODEL, DEFAULT_OLLAMA_MODEL } from "../shared/config.js";
+import { aiConnection, AI_TASKS, OPENROUTER_MODEL, OLLAMA_MODEL } from "../shared/config.js";
 import { chooseHint } from "../shared/hints.js";
 
 test("Ollama is detected on its standard port without treating cloud endpoints as local", () => {
   for (const url of ["http://127.0.0.1:11434/v1", "http://localhost:11434/v1/", "http://host.docker.internal:11434/v1", "http://ollama/v1"]) {
     const env = { OPENROUTER_BASE_URL: url };
     assert.equal(aiConnection(env).provider, "ollama");
-    assert.equal(aiConnection(env).defaultModel, DEFAULT_OLLAMA_MODEL);
+    assert.equal(aiConnection(env).model, OLLAMA_MODEL);
     assert.equal(hasAIKey(env), true);
   }
   assert.equal(aiConnection({}).provider, "openrouter");
-  assert.equal(aiConnection({}).defaultModel, DEFAULT_MODEL);
+  assert.equal(aiConnection({}).model, OPENROUTER_MODEL);
   assert.equal(hasAIKey({}), false);
   assert.equal(aiConnection({ AI_PROVIDER: "ollama" }).baseUrl, "http://127.0.0.1:11434/v1");
   assert.equal(aiConnection({ AI_PROVIDER: "ollama", OPENROUTER_BASE_URL: "http://localhost:8000/v1" }).provider, "ollama");
@@ -27,7 +27,7 @@ test("Ollama hints disable thinking and constrain the generated key to available
     return Response.json({ choices: [{ finish_reason: "stop", message: { content: '{"key":"atHome"}' } }] });
   });
   const candidates = [{ key: "atHome", text: "Попробуй узнать, бывает ли это дома." }];
-  const hint = await chooseHint({ OPENROUTER_BASE_URL: "http://127.0.0.1:11434/v1", MODEL: "gemma4:e2b" }, {
+  const hint = await chooseHint({ OPENROUTER_BASE_URL: "http://127.0.0.1:11434/v1", MODEL: "legacy/model", MODEL_HINT: "legacy/hint" }, {
     secret: "кошка", history: [], hints: [],
   }, candidates);
   assert.equal(hint.key, "atHome");
@@ -59,6 +59,7 @@ test("analysis and vision use their own Ollama JSON schemas; ordinary answers re
   assert.equal(sent[3].response_format.json_schema.schema.properties.guesses.maxItems, 3);
   assert.equal(JSON.stringify(sent[3].messages).includes("PRIVATE_SECRET"), false);
   assert.ok(sent.every(payload => payload.reasoning_effort === "none"));
+  assert.ok(sent.every(payload => payload.model === OLLAMA_MODEL));
 });
 
 test("HTTP 200 with a token-limited empty answer is a truncated response, not a valid hint", async t => {

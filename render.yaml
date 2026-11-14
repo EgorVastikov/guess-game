@@ -11,8 +11,6 @@ services:
         value: 22
       - key: OPENROUTER_API_KEY
         sync: false
-      - key: MODEL
-        value: nvidia/nemotron-3.5-super-vl:free
       - key: OPENROUTER_BASE_URL
         value: https://openrouter.ai/api/v1
       - key: STORE_KIND

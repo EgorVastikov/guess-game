@@ -6,7 +6,7 @@ import { once } from "node:events";
 import nodeAnalysis from "../api/analysis.js";
 import { onRequest as pagesAnalysis } from "../functions/api/analysis.js";
 import { onRequest as pagesAsk } from "../functions/api/ask.js";
-import { ANALYSIS_PENDING_MS, AI_TASKS } from "../shared/config.js";
+import { ANALYSIS_PENDING_MS, AI_TASKS, OPENROUTER_MODEL } from "../shared/config.js";
 import { gameStats } from "../shared/analysis.js";
 import { getGame, saveGame } from "../shared/store.js";
 
@@ -84,7 +84,7 @@ for (const [platform, call] of [["Node", callNode], ["Pages", callPages]]) {
     assert.equal(input.secret, "кошка");
     assert.equal(input.win, true);
     assert.deepEqual(input.stats, gameStats(game));
-    assert.equal(sent.model, "test/analysis");
+    assert.equal(sent.model, OPENROUTER_MODEL);
     assert.equal(sent.max_tokens, AI_TASKS.analysis.maxTokens);
     const saved = await getGame(env, game.gameId);
     assert.deepEqual(saved.analysis, report);

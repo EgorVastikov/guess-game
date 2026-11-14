@@ -1,5 +1,6 @@
-export const DEFAULT_MODEL = "nvidia/nemotron-3.5-super-vl:free";
-export const DEFAULT_OLLAMA_MODEL = "gemma4:e2b";
+// Models are fixed here for all AI tasks; environment variables cannot override them.
+export const OPENROUTER_MODEL = "nvidia/nemotron-3.5-super-vl:free";
+export const OLLAMA_MODEL = "gemma4:e2b";
 export const STORE_TIMEOUT_MS = 2500;
 export const GAME_TTL_SECONDS = 60 * 60;
 export const ASK_INTERVAL_MS = 700;
@@ -13,12 +14,12 @@ export const MAX_REQUEST_BYTES = 1536 * 1024;
 // Maximum ask duration: store read + AI answer + store write = 14 seconds.
 // public/index.html waits 20 seconds, leaving room for transport overhead.
 export const AI_TASKS = Object.freeze({
-  answer: Object.freeze({ modelEnv: "MODEL", maxTokens: 32, timeoutMs: 9000 }),
-  hint: Object.freeze({ modelEnv: "MODEL_HINT", maxTokens: 160, timeoutMs: 9000 }),
-  analysis: Object.freeze({ modelEnv: "MODEL_ANALYSIS", maxTokens: 1000, timeoutMs: 15000 }),
+  answer: Object.freeze({ maxTokens: 32, timeoutMs: 9000 }),
+  hint: Object.freeze({ maxTokens: 160, timeoutMs: 9000 }),
+  analysis: Object.freeze({ maxTokens: 1000, timeoutMs: 15000 }),
   // Allow room for three Russian names plus a question, including JSON syntax.
   // Local vision also needs time to load the model and image encoder on first use.
-  vision: Object.freeze({ modelEnv: "MODEL_VISION", maxTokens: 512, timeoutMs: 15000, ollamaTimeoutMs: 30000 }),
+  vision: Object.freeze({ maxTokens: 512, timeoutMs: 15000, ollamaTimeoutMs: 30000 }),
 });
 
 export function setting(env, name, fallback = "") {
@@ -35,6 +36,6 @@ export function aiConnection(env) {
   return {
     provider, baseUrl,
     apiKey: setting(env, "OPENROUTER_API_KEY", provider === "ollama" ? "ollama" : ""),
-    defaultModel: provider === "ollama" ? DEFAULT_OLLAMA_MODEL : DEFAULT_MODEL,
+    model: provider === "ollama" ? OLLAMA_MODEL : OPENROUTER_MODEL,
   };
 }
