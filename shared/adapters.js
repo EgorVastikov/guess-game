@@ -1,4 +1,29 @@
 import { runGameAction } from "./game.js";
+import { MAX_REQUEST_BYTES } from "./config.js";
+const TOO_LARGE = Symbol("Payload too large");
+
+async function readPagesBody(request) {
+  if (!request.body) return {};
+  const reader = request.body.getReader();
+  const decoder = new TextDecoder();
+  let text = "";
+  let size = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > MAX_REQUEST_BYTES) {
+        await reader.cancel();
+        return TOO_LARGE;
+      }
+      text += decoder.decode(value, { stream: true });
+    }
+    text += decoder.decode();
+    return JSON.parse(text);
+  } catch { return {}; }
+  finally { reader.releaseLock(); }
+}
 
 export function nodeHandler(action) {
   return async function handler(req, res) {
@@ -25,7 +50,10 @@ export function pagesHandler(action) {
     if (context.request.method !== "POST") {
       return jsonResponse({ status: 405, body: { message: "Method not allowed" } });
     }
-    const body = await context.request.json().catch(() => ({}));
+    const body = await readPagesBody(context.request);
+    if (body === TOO_LARGE) {
+      return jsonResponse({ status: 413, body: { message: "Запрос слишком большой. Упрости рисунок и попробуй ещё раз" } });
+    }
     return jsonResponse(await runGameAction(action, context.env, body));
   };
 }

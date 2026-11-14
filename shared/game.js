@@ -3,6 +3,8 @@ import { AIError, hasAIKey, requestAI } from "./ai.js";
 import { getGame, saveGame, StoreError, StoreConflictError } from "./store.js";
 import { chooseHint, hintCandidates, hintState } from "./hints.js";
 import { gameStats, generateAnalysis } from "./analysis.js";
+import { newDrawingGame, guessDrawing, confirmDrawing } from "./drawing.js";
+import { ImageInputError } from "./image-input.js";
 import {
   DEFAULT_LEFT, normalize, pickSecret, isHard, getCategoryHint,
   extractGuessCandidate, isExactGuess, answerFromFeatures, safeAnswer,
@@ -22,7 +24,10 @@ function snapshot(game, answer = "не знаю", message = "") {
   };
 }
 
-export async function newGame(env) {
+export async function newGame(env, body) {
+  const mode = body?.mode ?? "word";
+  if (mode === "drawing") return newDrawingGame(env);
+  if (mode !== "word") return { status: 400, body: { message: "Выбери режим игры" } };
   const secret = pickSecret();
   const hard = isHard(secret);
   const gameId = `game_${globalThis.crypto.randomUUID()}`;
@@ -43,6 +48,7 @@ export async function askQuestion(env, body) {
   if (!game) {
     return { status: 400, body: snapshot(null, "не знаю", "Игра не найдена. Нажми 'Новая игра'.") };
   }
+  if (game.mode === "drawing") return { status: 409, body: { message: "В этой партии нужно отправлять рисунок" } };
   if (game.over) return { status: 200, body: snapshot(game) };
   const now = Date.now();
   if (game.lastAskAt && now - game.lastAskAt < ASK_INTERVAL_MS) {
@@ -98,6 +104,7 @@ export async function requestHint(env, body) {
   }
   const game = await getGame(env, gameId);
   if (!game) return { status: 404, body: { message: "Игра не найдена. Нажми 'Новая игра'." } };
+  if (game.mode === "drawing") return { status: 409, body: { message: "Подсказки доступны в игре со словами" } };
   if (game.over) {
     return { status: 409, body: snapshot(game, "не знаю", "Игра окончена. Начни новую, чтобы получить подсказку") };
   }
@@ -148,6 +155,7 @@ export async function requestAnalysis(env, body) {
   }
   const game = await getGame(env, gameId);
   if (!game) return { status: 404, body: { message: "Игра не найдена. Начни новую партию" } };
+  if (game.mode === "drawing") return { status: 409, body: { message: "Разбор вопросов доступен в игре со словами" } };
   if (!game.over) return { status: 409, body: { message: "Разбор появится после окончания игры" } };
   if (game.analysis) return analysisReply(game);
   const stats = gameStats(game);
@@ -199,12 +207,15 @@ export async function requestAnalysis(env, body) {
 
 export async function runGameAction(action, env, body) {
   try {
-    if (action === "new") return await newGame(env);
+    if (action === "new") return await newGame(env, body);
     if (action === "ask") return await askQuestion(env, body);
     if (action === "hint") return await requestHint(env, body);
     if (action === "analysis") return await requestAnalysis(env, body);
+    if (action === "draw") return await guessDrawing(env, body);
+    if (action === "confirm") return await confirmDrawing(env, body);
     return { status: 404, body: { message: "Not found" } };
   } catch (error) {
+    if (error instanceof ImageInputError) return { status: error.status, body: { message: error.message } };
     if (error instanceof StoreConflictError) {
       return { status: 409, body: { message: "Игра уже изменилась. Повтори действие" } };
     }
@@ -212,7 +223,9 @@ export async function runGameAction(action, env, body) {
     console.error(`[game:${action}] ${error instanceof StoreError ? "storage_unavailable" : "internal_error"}`);
     return {
       status: error instanceof StoreError ? 503 : 500,
-      body: action === "analysis"
+      body: ["draw", "confirm"].includes(action)
+        ? { message: "Не удалось сохранить результат. Рисунок остаётся на странице — попробуй ещё раз" }
+        : action === "analysis"
         ? { message: "Не удалось сохранить разбор. Попробуй открыть его позже" }
         : action === "hint"
         ? { message: "Не удалось сохранить подсказку. Попробуй ещё раз" }

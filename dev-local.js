@@ -7,6 +7,9 @@ import apiNew from "./api/new.js";
 import apiAsk from "./api/ask.js";
 import apiHint from "./api/hint.js";
 import apiAnalysis from "./api/analysis.js";
+import apiDraw from "./api/draw.js";
+import apiConfirm from "./api/confirm.js";
+import { MAX_REQUEST_BYTES } from "./shared/config.js";
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = path.join(ROOT, "public");
@@ -48,9 +51,16 @@ function safeJoinPublic(urlPath) {
 }
 
 function readBody(req) {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     const chunks = [];
-    req.on("data", (c) => chunks.push(c));
+    let size = 0;
+    req.on("data", (c) => {
+      size += c.length;
+      if (size > MAX_REQUEST_BYTES) {
+        chunks.length = 0;
+        reject(new Error("Payload too large"));
+      } else chunks.push(c);
+    });
     req.on("end", () => resolve(Buffer.concat(chunks)));
     req.on("error", () => resolve(Buffer.alloc(0)));
   });
@@ -70,7 +80,10 @@ async function handleApi(req, res, pathname) {
     return sendJson(res, 405, { message: "Method not allowed" });
   }
 
-  const rawBuf = await readBody(req);
+  let rawBuf;
+  try { rawBuf = await readBody(req); } catch {
+    return sendJson(res, 413, { message: "Запрос слишком большой. Упрости рисунок и попробуй ещё раз" });
+  }
   let rawText = "";
   try {
     rawText = rawBuf.toString("utf8");
@@ -96,6 +109,8 @@ async function handleApi(req, res, pathname) {
   if (pathname === "/api/ask") return apiAsk(req, vres);
   if (pathname === "/api/hint") return apiHint(req, vres);
   if (pathname === "/api/analysis") return apiAnalysis(req, vres);
+  if (pathname === "/api/draw") return apiDraw(req, vres);
+  if (pathname === "/api/confirm") return apiConfirm(req, vres);
 
   return sendJson(res, 404, { message: "Not found" });
 }

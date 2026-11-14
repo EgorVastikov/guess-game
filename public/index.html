@@ -21,6 +21,7 @@
       }
 
       * { box-sizing: border-box; }
+      [hidden] { display: none !important; }
 
       body {
         margin: 0;
@@ -222,6 +223,25 @@
       .analysis-content { margin-top: 16px; padding: 18px; background: #faf5ff; border-radius: 18px; }
       .analysis-notice { color: #92400e; background: #fef3c7; border-radius: 12px; padding: 12px; }
       .analysis-section .btn { font-size: 17px; white-space: normal; }
+
+      .mode-picker { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 20px; }
+      .mode-picker .btn { flex: 1 1 240px; font-size: 17px; }
+      .mode-picker .btn[aria-pressed="false"] { background: #ffffff; color: #581c87; border-color: #d8b4fe; }
+      .drawing-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 16px 0; }
+      .drawing-toolbar label { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-weight: 700; }
+      .drawing-toolbar input[type="range"] { width: 110px; }
+      .drawing-toolbar input[type="color"] { width: 44px; height: 38px; cursor: pointer; }
+      .drawing-toolbar .btn { width: auto; min-width: 0; font-size: 15px; padding: 10px 14px; }
+      .drawing-toolbar .btn[aria-pressed="true"] { background: #581c87; color: white; }
+      .drawing-canvas { display: block; width: 100%; height: auto; border: 3px solid #cbd5e1; border-radius: 14px; background: white; touch-action: none; }
+      .drawing-info { color: #475569; line-height: 1.6; overflow-wrap: anywhere; }
+      .drawing-guess-panel { padding: 16px; margin-top: 16px; background: #faf5ff; border: 2px solid #e9d5ff; border-radius: 18px; overflow-wrap: anywhere; }
+      .drawing-guess-panel h2 { font-size: 22px; margin: 0 0 10px; }
+      .drawing-guesses { padding-left: 24px; font-size: 20px; font-weight: 700; }
+      .drawing-feedback { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+      .drawing-feedback .btn { min-width: 0; font-size: 16px; padding: 12px; white-space: normal; }
+      .drawing-panel .meta .btn { font-size: 19px; }
+      .modal-content .btn { font-size: 20px; padding: 16px; margin-top: 12px; }
 
       .pill {
         display: inline-flex;
@@ -553,9 +573,14 @@
   </head>
   <body>
     <div class="wrap">
-      <div class="title">Угадай предмет/животное</div>
+      <div class="title" id="mainTitle">Угадай предмет/животное</div>
+      <div class="mode-picker" role="group" aria-label="Режим игры">
+        <button class="btn secondary" id="wordModeBtn" aria-pressed="true">Угадай слово</button>
+        <button class="btn secondary" id="drawingModeBtn" aria-pressed="false">Нарисуй — ИИ угадает</button>
+      </div>
 
       <div class="card">
+        <div id="wordPanel">
         <div class="meta">
           <div class="left-count">Осталось вопросов: <span id="left">10</span></div>
           <div class="actions">
@@ -636,18 +661,51 @@
             <p id="analysisNextQuestion"></p>
           </div>
         </section>
+        </div>
+
+        <section class="drawing-panel" id="drawingPanel" aria-labelledby="drawingTitle" hidden>
+          <div class="meta">
+            <div class="label" id="drawingTitle">Ты рисуешь — ИИ угадывает</div>
+            <button class="btn" id="drawingNewBtn">Новый рисунок</button>
+          </div>
+          <p class="drawing-info">Рисуй мышью, пальцем или пером. Когда закончишь, нажми «Угадай».
+            Если ИИ ошибся, можно дорисовать подробности и попробовать ещё раз.</p>
+          <div class="drawing-toolbar" role="group" aria-label="Инструменты рисования">
+            <label>Цвет <input type="color" id="drawingColor" value="#1e293b"></label>
+            <label>Толщина <input type="range" id="drawingWidth" min="2" max="40" value="8">
+              <output id="drawingWidthValue" for="drawingWidth">8</output></label>
+            <button class="btn hint" id="drawingEraser" aria-pressed="false">Ластик</button>
+            <button class="btn hint" id="drawingUndo" disabled>Отменить штрих</button>
+            <button class="btn hint" id="drawingClear" disabled>Очистить</button>
+          </div>
+          <canvas class="drawing-canvas" id="drawingCanvas" width="800" height="600" aria-label="Полотно для рисования">Для рисования нужен браузер с поддержкой canvas.</canvas>
+          <p class="drawing-info">Попыток ИИ: <span id="drawingAttempts">0</span>. Отправляется только рисунок — без загаданного слова.</p>
+          <button class="btn secondary" id="drawingGuessBtn" disabled>Угадай</button>
+          <p class="muted" id="drawingStatus" role="status">Нарисуй что-нибудь на белом полотне</p>
+          <section class="drawing-guess-panel" id="drawingGuessPanel" aria-labelledby="drawingGuessTitle" hidden>
+            <h2 id="drawingGuessTitle">Предположения ИИ</h2>
+            <ul class="drawing-guesses" id="drawingGuesses"></ul>
+            <p id="drawingQuestion"></p>
+            <div class="drawing-feedback">
+              <button class="btn" id="drawingYes" disabled>Угадал!</button>
+              <button class="btn hint" id="drawingNo" disabled>Не угадал</button>
+            </div>
+          </section>
+        </section>
       </div>
     </div>
     
     <div class="modal-overlay" id="welcomeModal">
       <div class="modal-content">
         <h2>🎮 Привет! 🎯</h2>
-        <p>Нажми "Новая игра" чтобы начать!</p>
-        <button class="btn big" id="modalStartBtn">Новая игра</button>
+        <p>Выбери: угадывать слово или нарисовать что-нибудь для ИИ.</p>
+        <button class="btn" id="modalStartBtn">Угадай слово</button>
+        <button class="btn secondary" id="modalDrawBtn">Нарисуй — ИИ угадает</button>
       </div>
     </div>
 
-    <script>
+    <script type="module">
+      import { createDrawingController } from "/drawing.js";
       const $ = (id) => document.getElementById(id);
 
       const chips = [
@@ -667,6 +725,7 @@
       let noHintDirections = false;
       let savedAnalysis = null;
       let waitingForAnalysis = false;
+      let mode = "word";
 
       const NEW_GAME_TEXT = "Новая игра";
       const ASK_TEXT = "Спросить";
@@ -789,12 +848,16 @@
         $("hintBtn").disabled = isBusy || !gameId || over || hintsLeft <= 0 || noHintDirections;
         $("analysisBtn").disabled = isBusy || !gameId || !over;
         $("newGameBtn").disabled = isBusy;
+        $("wordModeBtn").disabled = $("drawingModeBtn").disabled = isBusy;
+        drawing.updateControls();
       }
 
       function setBusy(value, label) {
         isBusy = Boolean(value);
         if (isBusy) {
-          if (label === "new") {
+          if (label?.startsWith("drawing-")) {
+            drawing.setBusyLabel(label);
+          } else if (label === "new") {
             $("newGameBtn").textContent = "Начинаю...";
           } else if (label === "hint") {
             $("hintBtn").textContent = "Ищу подсказку...";
@@ -808,6 +871,7 @@
           $("askBtn").textContent = ASK_TEXT;
           $("hintBtn").textContent = HINT_TEXT;
           $("analysisBtn").textContent = analysisButtonText();
+          drawing.resetLabels();
         }
         updateAskEnabled();
       }
@@ -1036,6 +1100,24 @@
         });
       }
 
+      const drawing = createDrawingController({ $, apiPost, setBusy, isBusy: () => isBusy, updateControls: updateAskEnabled });
+
+      async function switchMode(nextMode) {
+        if (isBusy) return;
+        mode = nextMode;
+        $("wordPanel").hidden = mode !== "word";
+        $("drawingPanel").hidden = mode !== "drawing";
+        $("wordModeBtn").setAttribute("aria-pressed", String(mode === "word"));
+        $("drawingModeBtn").setAttribute("aria-pressed", String(mode === "drawing"));
+        $("mainTitle").textContent = mode === "word" ? "Угадай предмет/животное" : "Нарисуй — ИИ угадает";
+        if (mode === "drawing") await drawing.ensureStarted();
+        updateAskEnabled();
+      }
+
+      drawing.init();
+      $("wordModeBtn").addEventListener("click", () => switchMode("word"));
+      $("drawingModeBtn").addEventListener("click", () => switchMode("drawing"));
+
       $("newGameBtn").addEventListener("click", startGame);
       $("askBtn").addEventListener("click", onAskClick);
       $("hintBtn").addEventListener("click", onHintClick);
@@ -1061,6 +1143,11 @@
           modal.classList.remove('show');
           localStorage.setItem('hasVisited', 'true');
           startGame();
+        });
+        $("modalDrawBtn").addEventListener("click", () => {
+          modal.classList.remove('show');
+          localStorage.setItem('hasVisited', 'true');
+          switchMode("drawing");
         });
         
         // Close on overlay click
