@@ -1,5 +1,5 @@
 import { AIError, requestAI } from "./ai.js";
-import { answerFromFeatures, detectIntent, normalize } from "./rules.js";
+import { answerFromIntent, detectIntent, normalize } from "./rules.js";
 
 export function gameStats(game) {
   const history = Array.isArray(game.history) ? game.history : [];
@@ -10,20 +10,22 @@ export function gameStats(game) {
     const turn = index + 1;
     const question = normalize(item.q);
     const intent = detectIntent(question);
-    const key = intent?.type === "predicate" ? `predicate:${intent.key}` : `text:${question}`;
+    const key = intent?.key ? `${intent.type}:${intent.key}` : `text:${question}`;
     if (!groups.has(key)) groups.set(key, []);
-    groups.get(key).push({ turn, answer: item.a });
+    const definite = item.a === "да" || item.a === "нет";
+    const positive = definite ? (item.a === "да") !== Boolean(intent?.negated) : null;
+    groups.get(key).push({ turn, positive });
     if (item.a === "не знаю") unknownAnswers++;
-    const expected = answerFromFeatures(game.secret, question);
-    if (["да", "нет"].includes(item.a) && expected !== "не знаю" && item.a !== expected) {
+    const expected = answerFromIntent(game.secret, intent);
+    if (definite && expected !== null && item.a !== expected) {
       inconsistent.add(turn);
     }
   });
   const repeatedTurns = [];
   for (const items of groups.values()) {
     if (items.length > 1) repeatedTurns.push(items.map(item => item.turn));
-    const definite = items.filter(item => ["да", "нет"].includes(item.answer));
-    if (new Set(definite.map(item => item.answer)).size > 1) {
+    const definite = items.filter(item => item.positive !== null);
+    if (new Set(definite.map(item => item.positive)).size > 1) {
       definite.forEach(item => inconsistent.add(item.turn));
     }
   }

@@ -54,6 +54,8 @@ test("analysis and vision use their own Ollama JSON schemas; ordinary answers re
   await requestAI(env, "analysis", { bestCandidates: [] });
   await requestAI(env, "vision", { imageDataUrl: "data:image/png;base64,AAAA", secret: "PRIVATE_SECRET" });
   assert.equal("response_format" in sent[0], false);
+  assert.match(sent[0].messages[0].content, /Секрет обозначает обычного представителя/u);
+  assert.doesNotMatch(sent[1].messages[0].content, /Секрет обозначает обычного представителя/u);
   assert.deepEqual(sent[1].response_format.json_schema.schema.properties.bestQuestion.anyOf[0].properties.turn.enum, [2, 4]);
   assert.deepEqual(sent[2].response_format.json_schema.schema.properties.bestQuestion, { type: "null" });
   assert.equal(sent[3].response_format.json_schema.schema.properties.guesses.maxItems, 3);
@@ -84,6 +86,8 @@ test("OpenRouter keeps its existing reasoning settings and does not receive Olla
   assert.deepEqual(sent.reasoning, { enabled: false });
   assert.equal("reasoning_effort" in sent, false);
   assert.equal("response_format" in sent, false);
+  await requestAI({ OPENROUTER_API_KEY: "cloud-test" }, "answer", { secret: "кошка", question: "У неё есть усы?" });
+  assert.doesNotMatch(sent.messages[0].content, /Секрет обозначает обычного представителя/u);
 });
 
 for (const provider of ["ollama", "openrouter"]) {

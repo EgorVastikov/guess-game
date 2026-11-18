@@ -20,7 +20,8 @@ for (const platform of ["Node", "Pages"]) {
     process.env.OPENROUTER_API_KEY = "";
     try {
       for (const secret of SECRETS) {
-        for (const question of [secret, `Это ${secret}?`]) {
+        const guesses = [secret, `Это ${secret}?`, `А это ${secret}?`, `Мой ответ: ${secret}`, `Моя догадка: ${secret}`];
+        for (const question of guesses) {
           assert.equal(extractGuessCandidate(normalize(question)), normalize(secret), question);
           const gameId = crypto.randomUUID();
           await saveGame(env, gameId, { gameId, secret, left: 10, over: false, win: false, history: [], lastAskAt: 0 });

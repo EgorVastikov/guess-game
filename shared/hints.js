@@ -1,6 +1,6 @@
 import { AIError, requestAI } from "./ai.js";
 import { HINT_LIMIT } from "./config.js";
-import { detectIntent, normalize } from "./rules.js";
+import { SECRETS, answerFromIntent, detectIntent, getSecretFeatures, normalize } from "./rules.js";
 
 // The model chooses a direction; only server-owned text is shown to the player.
 // These questions suggest a check without asserting anything about the secret.
@@ -38,15 +38,32 @@ export function hintState(game) {
 
 export function hintCandidates(game) {
   const used = new Set((game.hints ?? []).map(hint => hint.key));
+  let remaining = SECRETS;
   for (const item of game.history ?? []) {
+    if (item.a !== "да" && item.a !== "нет") continue;
     const intent = detectIntent(normalize(item.q));
-    if (intent?.type === "predicate" && ["да", "нет"].includes(item.a)) used.add(intent.key);
+    if (intent?.type === "predicate") used.add(intent.key);
+    if (answerFromIntent(game.secret, intent) !== item.a) continue;
+    remaining = remaining.filter(secret => {
+      const answer = answerFromIntent(secret, intent);
+      return answer === null || answer === item.a;
+    });
   }
   for (const group of RELATED) {
     if (group.some(key => used.has(key))) group.forEach(key => used.add(key));
   }
-  return DIRECTIONS.filter(direction => !used.has(direction.key)
-    && !(direction.key === "biggerThanCat" && normalize(game.secret) === "кошка"));
+  const features = remaining.map(getSecretFeatures);
+  const secret = normalize(game.secret);
+  return DIRECTIONS
+    .filter(({ key }) => !used.has(key) && !(key === "biggerThanCat" && secret === "кошка"))
+    .map(direction => {
+      const yes = features.filter(item => item[direction.key] === true).length;
+      const no = features.filter(item => item[direction.key] === false).length;
+      return { direction, score: Math.min(yes, no) };
+    })
+    .filter(({ score }) => score > 0)
+    .sort((first, second) => second.score - first.score)
+    .map(({ direction }) => direction);
 }
 
 export async function chooseHint(env, game, candidates) {

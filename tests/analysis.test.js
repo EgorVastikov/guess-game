@@ -178,6 +178,17 @@ test("statistics count normalized/equivalent repeats and identify conflicting an
   });
 });
 
+test("statistics compare negated questions in the same direction and flag old incorrect answers", () => {
+  const stats = gameStats({ secret: "голубь", history: [
+    { q: "У него есть крылья?", a: "да" },
+    { q: "У него нет крыльев?", a: "нет" },
+    { q: "Какого он цвета?", a: "да" },
+    { q: "Оно лает?", a: "да" },
+  ] });
+  assert.deepEqual(stats.repeatedTurns, [[1, 2]]);
+  assert.deepEqual(stats.inconsistentTurns, [3, 4]);
+});
+
 test("an answer contradicting known features cannot become the best question", async t => {
   const game = await seed({ history: [{ q: "Это живое?", a: "нет" }, { q: "Это бывает дома?", a: "да" }] });
   let input;

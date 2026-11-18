@@ -41,7 +41,7 @@ export async function requestAI(env, task, input) {
         stream: false,
         ...(provider === "ollama" ? { reasoning_effort: "none" } : { reasoning: { enabled: false } }),
         ...(format ? { response_format: format } : {}),
-        messages: buildMessages(task, input),
+        messages: buildMessages(task, input, provider),
       }),
       signal: controller.signal,
     });

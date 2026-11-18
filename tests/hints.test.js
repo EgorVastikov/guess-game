@@ -169,6 +169,22 @@ test("already-known or equivalent predicates are removed from hint candidates", 
   assert.equal(candidates.includes("schoolItem"), true);
 });
 
+test("hint directions distinguish remaining words and put more even splits first", () => {
+  const game = {
+    secret: "голубь",
+    history: [
+      { q: "Это птица?", a: "да" },
+      { q: "Это живое?", a: "нет" }, // An incorrect answer saved by a previous version.
+    ],
+  };
+  const keys = hintCandidates(game).map(item => item.key);
+  assert.deepEqual(keys.slice(0, 2), ["handheld", "livesOnFarm"]);
+  assert.equal(keys.includes("hasLegs"), false);
+  assert.equal(keys.includes("livesInForest"), false);
+  assert.equal(keys.includes("canFly"), true);
+  assert.equal(keys.includes("atHome"), true);
+});
+
 test("a repeated model direction cannot consume a second hint", async t => {
   const game = await seed({ hints: [{ key: "atHome", text: "Попробуй узнать, бывает ли это дома." }] });
   t.mock.method(globalThis, "fetch", async () => modelReply("atHome"));

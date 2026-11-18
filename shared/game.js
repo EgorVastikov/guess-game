@@ -1,4 +1,4 @@
-import { ASK_INTERVAL_MS, ANALYSIS_PENDING_MS } from "./config.js";
+import { ASK_INTERVAL_MS, ANALYSIS_PENDING_MS, MAX_QUESTION_LENGTH } from "./config.js";
 import { AIError, hasAIKey, requestAI } from "./ai.js";
 import { getGame, saveGame, StoreError, StoreConflictError } from "./store.js";
 import { chooseHint, hintCandidates, hintState } from "./hints.js";
@@ -7,7 +7,7 @@ import { newDrawingGame, guessDrawing, confirmDrawing } from "./drawing.js";
 import { ImageInputError } from "./image-input.js";
 import {
   DEFAULT_LEFT, normalize, pickSecret, isHard, getCategoryHint,
-  extractGuessCandidate, isExactGuess, answerFromFeatures, safeAnswer,
+  detectIntent, answerFromIntent, safeAnswer,
 } from "./rules.js";
 
 function snapshot(game, answer = "не знаю", message = "") {
@@ -41,9 +41,14 @@ export async function newGame(env, body) {
 
 export async function askQuestion(env, body) {
   const { gameId, question } = body ?? {};
-  if (typeof gameId !== "string" || typeof question !== "string" || !gameId || !normalize(question)) {
+  if (typeof gameId !== "string" || typeof question !== "string" || !gameId) {
     return { status: 400, body: snapshot(null, "не знаю", "Напиши вопрос") };
   }
+  if (question.length > MAX_QUESTION_LENGTH) {
+    return { status: 400, body: snapshot(null, "не знаю", `Сократи вопрос до ${MAX_QUESTION_LENGTH} символов`) };
+  }
+  const qNorm = normalize(question);
+  if (!qNorm) return { status: 400, body: snapshot(null, "не знаю", "Напиши вопрос") };
   const game = await getGame(env, gameId);
   if (!game) {
     return { status: 400, body: snapshot(null, "не знаю", "Игра не найдена. Нажми 'Новая игра'.") };
@@ -55,31 +60,32 @@ export async function askQuestion(env, body) {
     return { status: 200, body: snapshot(game, "не знаю", "Подожди секундочку и спроси ещё раз") };
   }
 
-  const qNorm = normalize(question);
-  const guess = extractGuessCandidate(qNorm);
-  let answer = "не знаю";
+  const intent = detectIntent(qNorm);
+  let answer = answerFromIntent(game.secret, intent);
   let message = "";
-  if (guess) {
-    game.win = isExactGuess(qNorm, normalize(game.secret));
-    game.over = game.win;
-    answer = game.win ? "да" : "нет";
-    if (game.win) message = "Победа!";
-  } else {
-    answer = answerFromFeatures(game.secret, qNorm);
-    if (answer === "не знаю") {
-      if (hasAIKey(env)) {
-        try {
-          answer = safeAnswer(await requestAI(env, "answer", { secret: game.secret, question, history: game.history }));
-        } catch (error) {
-          if (!(error instanceof AIError)) throw error;
-          const text = error.code === "rate_limit"
-            ? "ИИ занят. Подожди немного и повтори вопрос"
-            : "ИИ не ответил. Попробуй ещё раз";
-          return { status: 503, body: snapshot(game, "не знаю", text) };
-        }
-      } else {
-        message = "На этот вопрос пока не могу ответить. Попробуй спросить иначе";
+  if (intent?.type === "guess" && answer === "да") {
+    game.win = true;
+    game.over = true;
+    message = "Победа!";
+  }
+  if (answer === null) {
+    if (hasAIKey(env)) {
+      try {
+        const { inconsistentTurns } = gameStats(game);
+        const history = Array.isArray(game.history)
+          ? game.history.filter((_, index) => !inconsistentTurns.includes(index + 1))
+          : [];
+        answer = safeAnswer(await requestAI(env, "answer", { secret: game.secret, question, history }));
+      } catch (error) {
+        if (!(error instanceof AIError)) throw error;
+        const text = error.code === "rate_limit"
+          ? "ИИ занят. Подожди немного и повтори вопрос"
+          : "ИИ не ответил. Попробуй ещё раз";
+        return { status: 503, body: snapshot(game, "не знаю", text) };
       }
+    } else {
+      answer = "не знаю";
+      message = "На этот вопрос пока не могу ответить. Попробуй спросить иначе";
     }
   }
   game.lastAskAt = now;
@@ -114,7 +120,7 @@ export async function requestHint(env, body) {
   const candidates = hintCandidates(game);
   if (!candidates.length) {
     return { status: 409, body: {
-      ...snapshot(game, "не знаю", "Все направления уже проверены. Попробуй угадать!"),
+      ...snapshot(game, "не знаю", "Полезных подсказок больше нет. Попробуй угадать!"),
       code: "no_hint_directions",
     } };
   }

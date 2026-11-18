@@ -6,7 +6,7 @@ import nodeNew from "../api/new.js";
 import nodeAsk from "../api/ask.js";
 import { onRequest as pagesNew } from "../functions/api/new.js";
 import { onRequest as pagesAsk } from "../functions/api/ask.js";
-import { AI_TASKS, OPENROUTER_MODEL, GAME_TTL_SECONDS, STORE_TIMEOUT_MS } from "../shared/config.js";
+import { AI_TASKS, OPENROUTER_MODEL, GAME_TTL_SECONDS, MAX_QUESTION_LENGTH, STORE_TIMEOUT_MS } from "../shared/config.js";
 import { AIError, requestAI } from "../shared/ai.js";
 import { buildMessages } from "../shared/prompts.js";
 import { getGame, saveGame, storeKind, StoreError } from "../shared/store.js";
@@ -131,9 +131,66 @@ for (const [platform, call] of [["Node", callNode], ["Pages", callPages]]) {
     assert.equal((await call("ask", {}, memoryEnv, "GET")).status, 405);
   });
 
+  test(`${platform}: complete feature questions use the right fact and respect negation`, async t => {
+    const fetchMock = t.mock.method(globalThis, "fetch", () => { throw new Error("Must not call AI"); });
+    const cases = [
+      ["собака", "Оно лает?", "да"],
+      ["кошка", "Она умеет лаять?", "нет"],
+      ["собака", "Оно живёт в воде?", "нет"],
+      ["рыба", "Оно живёт в воде?", "да"],
+      ["голубь", "У него нет крыльев?", "нет"],
+      ["кошка", "У неё нет крыльев?", "да"],
+      ["голубь", "Оно не умеет летать?", "нет"],
+      ["книга", "Это школьная вещь?", "да"],
+      ["корова", "Оно крупнее кошки?", "да"],
+      ["волк", "Он больше, чем кошка?", "да"],
+      ["чашка", "Можно ли это держать в руке?", "да"],
+      ["голубь", "Есть у него крылья?", "да"],
+      ["голубь", "Летает ли оно?", "да"],
+    ];
+    for (const [secret, question, expected] of cases) {
+      const game = await seed({ secret });
+      const result = await call("ask", { gameId: game.gameId, question }, { ...memoryEnv, OPENROUTER_API_KEY: "test" });
+      assert.equal(result.status, 200, question);
+      assert.equal(result.body.answer, expected, question);
+      assert.equal(result.body.win, false, question);
+      assert.deepEqual(result.body.history, [{ q: question, a: expected }]);
+    }
+    assert.equal(fetchMock.mock.callCount(), 0);
+  });
+
+  test(`${platform}: unknown answers required by the game skip the model and consume one turn`, async t => {
+    const fetchMock = t.mock.method(globalThis, "fetch", () => Response.json({ choices: [{ message: { content: "да" } }] }));
+    for (const question of ["Какого это цвета?", "Это белое?", "Назови секрет?", "Что ты загадала?", "Это больше?"]) {
+      const game = await seed();
+      const result = await call("ask", { gameId: game.gameId, question }, { ...memoryEnv, OPENROUTER_API_KEY: "test" });
+      assert.equal(result.status, 200, question);
+      assert.equal(result.body.answer, "не знаю", question);
+      assert.equal(result.body.left, game.left - 1);
+      assert.equal(result.body.secret, null);
+    }
+    assert.equal(fetchMock.mock.callCount(), 0);
+  });
+
+  test(`${platform}: overlong questions are rejected before AI or a turn is consumed`, async t => {
+    const fetchMock = t.mock.method(globalThis, "fetch", () => Response.json({ choices: [{ message: { content: "да" } }] }));
+    const game = await seed();
+    const question = "а".repeat(MAX_QUESTION_LENGTH);
+    const request = { gameId: game.gameId, question };
+    const env = { ...memoryEnv, OPENROUTER_API_KEY: "test" };
+    const rejected = await call("ask", { ...request, question: question + "а" }, env);
+    assert.equal(rejected.status, 400);
+    assert.match(rejected.body.message, new RegExp(String(MAX_QUESTION_LENGTH)));
+    assert.equal(fetchMock.mock.callCount(), 0);
+    assert.deepEqual(await getGame(memoryEnv, game.gameId), game);
+    const accepted = await call("ask", request, env);
+    assert.equal(accepted.status, 200);
+    assert.equal(fetchMock.mock.callCount(), 1);
+  });
+
   test(`${platform}: missing key retains the playable offline fallback`, async () => {
     const game = await seed();
-    const result = await call("ask", { gameId: game.gameId, question: "Какого это цвета?" });
+    const result = await call("ask", { gameId: game.gameId, question: "Есть ли у этого хвост?" });
     assert.equal(result.status, 200);
     assert.equal(result.body.answer, "не знаю");
     assert.equal(result.body.left, 9);
@@ -144,7 +201,7 @@ for (const [platform, call] of [["Node", callNode], ["Pages", callPages]]) {
   test(`${platform}: upstream quota failure does not change persisted state`, async t => {
     t.mock.method(globalThis, "fetch", async () => new Response("{}", { status: 429 }));
     const game = await seed();
-    const result = await call("ask", { gameId: game.gameId, question: "Какого это цвета?" }, {
+    const result = await call("ask", { gameId: game.gameId, question: "Есть ли у этого хвост?" }, {
       ...memoryEnv, OPENROUTER_API_KEY: "test-ai-key",
     });
     assert.equal(result.status, 503);
@@ -169,7 +226,7 @@ test("OpenRouter gets the fixed model, answer budget, disabled reasoning and six
   });
   const history = Array.from({ length: 8 }, (_, i) => ({ q: `question-${i}`, a: "нет" }));
   const game = await seed({ history });
-  const result = await callPages("ask", { gameId: game.gameId, question: "Какого это цвета?" }, {
+  const result = await callPages("ask", { gameId: game.gameId, question: "Есть ли у этого хвост?" }, {
     ...memoryEnv, OPENROUTER_API_KEY: "test-key", MODEL: "test/model",
     OPENROUTER_BASE_URL: "https://router.example.test/v1/",
   });
@@ -181,6 +238,103 @@ test("OpenRouter gets the fixed model, answer budget, disabled reasoning and six
   assert.deepEqual(sent.payload.reasoning, { enabled: false });
   assert.deepEqual(JSON.parse(sent.payload.messages[1].content).history, history.slice(-6));
   assert.equal(sent.signal.aborted, false);
+});
+
+test("unrecognized and compound questions reach the model without losing qualifiers", async t => {
+  let sent;
+  t.mock.method(globalThis, "fetch", async (_, options) => {
+    sent = JSON.parse(JSON.parse(options.body).messages[1].content);
+    return Response.json({ choices: [{ message: { content: "не знаю" } }] });
+  });
+  const env = { ...memoryEnv, OPENROUTER_API_KEY: "test-key" };
+  for (const [secret, question] of [
+    ["голубь", "Оно летает и плавает?"],
+    ["кошка", "У неё четыре лапы?"],
+    ["голубь", "Оно летает ночью?"],
+    ["кошка", "Это меньше кошки?"],
+    ["собака", "Сколько ей лет?"],
+    ["стул", "Это мебель?"],
+    ["кошка", "Оно ест рыбу?"],
+    ["черепаха", "Оно живёт в воде?"],
+  ]) {
+    const game = await seed({ secret });
+    sent = null;
+    const result = await callPages("ask", { gameId: game.gameId, question }, env);
+    assert.equal(result.status, 200);
+    assert.equal(result.body.answer, "не знаю");
+    assert.equal(sent?.question, question);
+  }
+});
+
+test("only an unambiguous model answer becomes yes or no", async t => {
+  const fetchMock = t.mock.method(globalThis, "fetch");
+  for (const [content, expected] of [
+    ["Да или нет", "не знаю"],
+    ["Нет, хотя, возможно, да", "не знаю"],
+    ["Да?", "не знаю"],
+    ["ДА.", "да"],
+    ["нет", "нет"],
+  ]) {
+    fetchMock.mock.mockImplementation(async () => Response.json({ choices: [{ message: { content } }] }));
+    const game = await seed();
+    const result = await callPages("ask", { gameId: game.gameId, question: "Есть ли у этого хвост?" }, {
+      ...memoryEnv, OPENROUTER_API_KEY: "test-key",
+    });
+    assert.equal(result.status, 200);
+    assert.equal(result.body.answer, expected, content);
+    assert.deepEqual(result.body.history, [{ q: "Есть ли у этого хвост?", a: expected }]);
+  }
+});
+
+test("the answer request caps serialized history and keeps the full current question", async t => {
+  let sent;
+  t.mock.method(globalThis, "fetch", async (_, options) => {
+    sent = JSON.parse(JSON.parse(options.body).messages[1].content);
+    return Response.json({ choices: [{ message: { content: "да" } }] });
+  });
+  const quoted = '"'.repeat(490);
+  const history = [
+    { q: "Слишком старый вопрос", a: "нет" },
+    { q: "Ещё один старый вопрос", a: "нет" },
+    { q: "Ранний короткий вопрос", a: "да" },
+    { q: "д".repeat(3000), a: "нет" },
+    { q: quoted + "Старый", a: "нет" },
+    { q: "Недавний короткий вопрос", a: "да" },
+    { q: quoted + "Новый", a: "нет" },
+    { q: "Последний короткий вопрос", a: "да" },
+  ];
+  const game = await seed({ history });
+  const question = "Есть ли у этого хвост?";
+  const result = await callPages("ask", { gameId: game.gameId, question }, {
+    ...memoryEnv, OPENROUTER_API_KEY: "test-key",
+  });
+  assert.equal(result.status, 200);
+  assert.equal(sent.question, question);
+  assert.ok(JSON.stringify(sent.history).length <= 2000);
+  assert.deepEqual(sent.history, [history[2], ...history.slice(-3)]);
+  assert.deepEqual(result.body.history, [...history, { q: question, a: "да" }]);
+});
+
+test("verified mistakes are left out of the answer context and kept in the game history", async t => {
+  let sent;
+  t.mock.method(globalThis, "fetch", async (_, options) => {
+    sent = JSON.parse(JSON.parse(options.body).messages[1].content);
+    return Response.json({ choices: [{ message: { content: "да" } }] });
+  });
+  const reliable = { q: "Оно лает?", a: "да" };
+  const history = [
+    { q: "Оно живёт в воде?", a: "да" },
+    reliable,
+    { q: "Какого оно цвета?", a: "да" },
+  ];
+  const game = await seed({ secret: "собака", history });
+  const question = "Есть ли у этого хвост?";
+  const result = await callPages("ask", { gameId: game.gameId, question }, {
+    ...memoryEnv, OPENROUTER_API_KEY: "test-key",
+  });
+  assert.equal(result.status, 200);
+  assert.deepEqual(sent.history, [reliable]);
+  assert.deepEqual(result.body.history, [...history, { q: question, a: "да" }]);
 });
 
 test("AI tasks use separate instructions/budgets and the fixed OpenRouter model", async t => {

@@ -126,6 +126,7 @@ const BIRDS = makeSet([
 const FISH = makeSet(["рыба"]);
 
 const SWIMS = makeSet(["рыба", "утка", "гусь", "лягушка", "черепаха"]);
+const WATER_HABITAT_DEPENDS_ON_SPECIES = makeSet(["утка", "гусь", "лягушка", "черепаха"]);
 
 const FOREST = makeSet([
   "заяц",
@@ -262,11 +263,8 @@ function normalize(s) {
 }
 
 function safeAnswer(value) {
-  const t = normalize(value);
-  if (t === "да" || t.startsWith("да ")) return "да";
-  if (t === "нет" || t.startsWith("нет ")) return "нет";
-  if (t === "не знаю" || t.startsWith("не знаю")) return "не знаю";
-  return "не знаю";
+  const answer = value.trim().toLowerCase().replace(/[.!]$/u, "");
+  return answer === "да" || answer === "нет" ? answer : "не знаю";
 }
 
 function pickSecret() {
@@ -309,135 +307,85 @@ function getSecretFeatures(secret) {
     canMove,
     canFly,
     canSwim,
+    barks: s === "собака",
     toy: TOYS.has(s),
     natureRelated: living,
     canTouch,
     livesInForest: FOREST.has(s),
     livesOnFarm: FARM.has(s),
+    livesInWater: WATER_HABITAT_DEPENDS_ON_SPECIES.has(s) ? null : isFish,
     isDomestic: FARM.has(s) || (AT_HOME.has(s) && living),
   };
 }
 
+// Match complete phrases so qualifiers and additional clauses reach the fallback intact.
+const PREDICATES = [
+  ["living", /^(?:жив(?:ое|ой|ая|ые)|живое существо|животное)$/u],
+  ["thing", /^(?:вещь|предмет|нежив(?:ое|ой|ая))$/u],
+  ["isBird", /^птица$/u],
+  ["isFish", /^рыба$/u],
+  ["hasWings", /^крыл(?:о|ья|ьев)$/u],
+  ["hasBeak", /^клюв(?:а)?$/u],
+  ["hasFeathers", /^пер(?:о|ья|ьев)$/u],
+  ["hasLegs", /^(?:ног(?:и|а)?|лап(?:ы|а|ки|ок)?|ноги или лапы)$/u],
+  ["isDomestic", /^домашн(?:ее|ий|яя)(?: животное)?$/u],
+  ["atHome", /^(?:(?:бывает|можно встретить) )?дома$/u],
+  ["biggerThanCat", /^(?:больше|крупнее) (?:кошки|чем кошка)$/u],
+  ["handheld", /^(?:(?:можно )?(?:держать|подержать) )?(?:в руке|одной рукой)$/u],
+  ["schoolItem", /^(?:школьн(?:ое|ая|ый)(?: вещь| предмет)?|для школы|(?:нужн(?:о|а|ен)|используют) в школе|связан(?:о|а)? со школой)$/u],
+  ["canMove", /^(?:(?:может|умеет) двигаться|двигается)(?: сам[ао]?)?$/u],
+  ["canFly", /^(?:летает|(?:умеет|может) летать)$/u],
+  ["canSwim", /^(?:плавает|(?:умеет|может) плавать)$/u],
+  ["canTouch", /^(?:можно )?(?:потрогать|трогать|пощупать)$/u],
+  ["barks", /^(?:лает|(?:умеет|может) лаять)$/u],
+  ["toy", /^(?:игрушка|можно играть как с игрушкой)$/u],
+  ["natureRelated", /^(?:из природы|(?:бывает|встречается) в природе)$/u],
+  ["livesInForest", /^(?:(?:живет|бывает|встречается) )?в лесу$/u],
+  ["livesOnFarm", /^(?:(?:живет|бывает|встречается) )?на ферме$/u],
+  ["livesInWater", /^живет в воде$/u],
+];
+
+const SECRET_QUESTION = /(?:^| )(?:какой секрет|что это за|что (?:ты )?загадал[аио]?)(?: |$)/u;
+const SECRET_REQUEST = /^(?:пожалуйста )?(?:назови|подскажи)(?: (?:мне|секрет(?:ное слово)?|слово|все варианты|ответ|пожалуйста))*$/u;
+const COLOR_QUESTION = /(?:^| )(?:цвет(?:а|ом|е|у)?|(?:бел|черн|темн|красн|зелен|желт|син|оранжев|розов|сер)(?:ый|ая|ое|ые|ий|яя|ее|ие|ого|его))(?: |$)/u;
+const SIZE_COMPARISON = /(?:^| )(?:больше|меньше|крупнее|мельче|выше|ниже)(?: |$)/u;
+const SMALLER_THAN_CAT = /^(?:меньше|мельче) (?:кошки|чем кошка)$/u;
+
+function extractGuessCandidate(question) {
+  const candidate = normalize(question).replace(/^(?:(?:а )?это|мой ответ|моя догадка) /u, "");
+  return SECRET_NAMES.has(candidate) ? candidate : null;
+}
+
 function detectIntent(questionNorm) {
-  const q = String(questionNorm || "");
+  const guess = extractGuessCandidate(questionNorm);
+  if (guess) return { type: "guess", key: guess };
 
-  if (
-    q.includes("что загад") ||
-    q.includes("что зага") ||
-    q.includes("какой секрет") ||
-    q.includes("назови") ||
-    q.includes("подскажи") ||
-    q.includes("что это за")
-  ) {
-    return { type: "alwaysUnknown", key: "secretReveal" };
+  if (SECRET_QUESTION.test(questionNorm) || SECRET_REQUEST.test(questionNorm) || COLOR_QUESTION.test(questionNorm)) {
+    return { type: "alwaysUnknown" };
   }
 
-  if (
-    q.includes("какого цвет") ||
-    q.includes("цвет") ||
-    q.includes("бел") ||
-    q.includes("черн") ||
-    q.includes("тёмн") ||
-    q.includes("темн") ||
-    q.includes("красн") ||
-    q.includes("син") ||
-    q.includes("зел")
-  ) {
-    return { type: "alwaysUnknown", key: "color" };
-  }
-
-  if ((q.includes("больше") || q.includes("меньше")) && !q.includes("кошк")) {
-    return { type: "alwaysUnknown", key: "relativeSize" };
-  }
-
-  if (q.includes("лес")) return { type: "predicate", key: "livesInForest" };
-  if (q.includes("ферм")) return { type: "predicate", key: "livesOnFarm" };
-  if (q.includes("жив")) return { type: "predicate", key: "living" };
-  if (q.includes("вещ") || q.includes("предмет")) return { type: "predicate", key: "thing" };
-  if (q.includes("птиц")) return { type: "predicate", key: "isBird" };
-  if (q.includes("рыб")) return { type: "predicate", key: "isFish" };
-  if (q.includes("крыл")) return { type: "predicate", key: "hasWings" };
-  if (q.includes("клюв")) return { type: "predicate", key: "hasBeak" };
-  if (q.includes("пер") && q.includes("ья")) return { type: "predicate", key: "hasFeathers" };
-  if (q.includes("ног") || q.includes("лап")) return { type: "predicate", key: "hasLegs" };
-  if (q.includes("домашн")) return { type: "predicate", key: "isDomestic" };
-  if (q.includes("дома") || q.includes("дом")) return { type: "predicate", key: "atHome" };
-  if (q.includes("больше") && q.includes("кошк")) return { type: "predicate", key: "biggerThanCat" };
-  if ((q.includes("держ") && q.includes("рук")) || q.includes("в руке")) return { type: "predicate", key: "handheld" };
-  if (q.includes("школь") || q.includes("школ")) return { type: "predicate", key: "schoolItem" };
-  if (q.includes("двиг")) return { type: "predicate", key: "canMove" };
-  if (q.includes("лет")) return { type: "predicate", key: "canFly" };
-  if (q.includes("плав")) return { type: "predicate", key: "canSwim" };
-  if (q.includes("потрог") || q.includes("трог") || q.includes("пощуп")) return { type: "predicate", key: "canTouch" };
-  if (q.includes("игруш")) return { type: "predicate", key: "toy" };
-  if (q.includes("природ")) return { type: "predicate", key: "natureRelated" };
-
+  const phrase = questionNorm
+    .replace(/^(?:а )?(?:(?:это|он|она|оно) |у (?:него|нее|этого) |есть (?:ли )?у (?:него|нее|этого) )/u, "")
+    .replace(/^есть (?:ли )?/u, "")
+    .replace(/^(можно|может|умеет) ли(?: это| он| она| оно)? /u, "$1 ")
+    .replace(/ ли(?: это| он| она| оно)?$/u, "");
+  const property = phrase.replace(/^(?:не|нет) /u, "");
+  const predicate = PREDICATES.find(([, pattern]) => pattern.test(property));
+  if (predicate) return { type: "predicate", key: predicate[0], negated: property !== phrase };
+  if (SIZE_COMPARISON.test(questionNorm) && !SMALLER_THAN_CAT.test(property)) return { type: "alwaysUnknown" };
   return null;
 }
 
-function extractGuessCandidate(questionNorm) {
-  const q = normalize(questionNorm);
-  let rest = q;
-  if (rest.startsWith("это ")) rest = rest.slice(4).trim();
-  if (!rest) return null;
-
-  // Exact dictionary guesses take priority over overlapping feature stems:
-  // e.g. «белка» contains the color stem «бел», «рыба» is also a category.
-  if (SECRET_NAMES.has(rest)) return rest;
-  if (detectIntent(q)) return null;
-
-  const blockers = [
-    "больше",
-    "меньше",
-    "жив",
-    "вещ",
-    "предмет",
-    "птиц",
-    "рыб",
-    "крыл",
-    "клюв",
-    "пер",
-    "ног",
-    "лап",
-    "дома",
-    "дом",
-    "школ",
-    "держ",
-    "рук",
-    "лет",
-    "плав",
-    "двиг",
-    "потрог",
-    "трог",
-    "пощуп",
-    "цвет",
-    "природ",
-  ];
-  for (const b of blockers) {
-    if (rest.includes(b)) return null;
-  }
-
-  const words = rest.split(" ").filter(Boolean);
-  if (words.length < 1 || words.length > 3) return null;
-  return rest;
-}
-
-function isExactGuess(questionNorm, secretNorm) {
-  const cand = extractGuessCandidate(questionNorm);
-  if (!cand) return false;
-  return normalize(cand) === normalize(secretNorm);
-}
-
-function answerFromFeatures(secret, questionNorm) {
-  const intent = detectIntent(questionNorm);
-  if (!intent) return "не знаю";
+function answerFromIntent(secret, intent) {
+  if (!intent) return null;
   if (intent.type === "alwaysUnknown") return "не знаю";
+  const secretName = normalize(secret);
+  if (intent.type === "guess") return intent.key === secretName ? "да" : "нет";
+  if (!SECRET_NAMES.has(secretName)) return null;
 
-  const features = getSecretFeatures(secret);
-  const value = features?.[intent.key];
-  if (typeof value !== "boolean") return "не знаю";
-  return value ? "да" : "нет";
+  const value = getSecretFeatures(secretName)[intent.key];
+  if (typeof value !== "boolean") return null;
+  return value !== intent.negated ? "да" : "нет";
 }
 
-
-export { DEFAULT_LEFT, SECRETS, normalize, safeAnswer, pickSecret, isHard, getCategoryHint, getSecretFeatures, detectIntent, extractGuessCandidate, isExactGuess, answerFromFeatures };
+export { DEFAULT_LEFT, SECRETS, normalize, safeAnswer, pickSecret, isHard, getCategoryHint, getSecretFeatures, detectIntent, extractGuessCandidate, answerFromIntent };

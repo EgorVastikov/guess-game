@@ -4,6 +4,7 @@ export const OLLAMA_MODEL = "gemma4:e2b";
 export const STORE_TIMEOUT_MS = 2500;
 export const GAME_TTL_SECONDS = 60 * 60;
 export const ASK_INTERVAL_MS = 700;
+export const MAX_QUESTION_LENGTH = 500;
 export const HINT_LIMIT = 2;
 // A crashed analysis request may be retried after this lease expires.
 export const ANALYSIS_PENDING_MS = 30000;
