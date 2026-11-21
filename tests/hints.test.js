@@ -87,6 +87,25 @@ for (const [platform, call] of [["Node", callNode], ["Pages", callPages]]) {
     assert.equal(saved.version, 1);
   });
 
+  test(`${platform}: a flight answer leads to a new related question without revealing the answer`, async t => {
+    const history = [{ q: "Оно умеет летать?", a: "да" }];
+    const game = await seed({ secret: "голубь", history, left: 9 });
+    let candidates;
+    t.mock.method(globalThis, "fetch", async (_, options) => {
+      const { messages } = JSON.parse(options.body);
+      candidates = JSON.parse(messages[1].content).candidates.map(item => item.key);
+      return modelReply("canSwim");
+    });
+    const result = await call({ gameId: game.gameId });
+    assert.equal(result.status, 200);
+    assert.deepEqual(candidates, ["canSwim", "livesOnFarm", "atHome"]);
+    assert.deepEqual(result.body.hints, [{ text: "Попробуй узнать, умеет ли это плавать." }]);
+    assert.deepEqual(result.body.history, history);
+    assert.equal(result.body.left, 9);
+    assert.equal(result.body.secret, null);
+    assert.equal((await getGame(env, game.gameId)).hints[0].afterTurn, 1);
+  });
+
   test(`${platform}: two hints exhaust the server limit and cannot repeat directions`, async t => {
     const sent = [];
     const game = await seed();
@@ -103,6 +122,8 @@ for (const [platform, call] of [["Node", callNode], ["Pages", callPages]]) {
     assert.equal(second.body.left, 10);
     assert.equal(sent[1].candidates.some(item => item.key === "atHome"), false);
     assert.equal(sent[1].hints[0].key, "atHome");
+    assert.deepEqual(sent[0].candidates.map(item => item.key).sort(), ["atHome", "handheld", "living"]);
+    assert.equal(sent[1].candidates.some(item => item.key === "living"), false);
     const third = await call({ gameId: game.gameId, hintLimit: 99, hints: [] });
     assert.equal(third.status, 409);
     assert.equal(third.body.hintsUsed, 2);
@@ -162,7 +183,7 @@ for (const [platform, call] of [["Node", callNode], ["Pages", callPages]]) {
 
 test("already-known or equivalent predicates are removed from hint candidates", () => {
   const candidates = hintCandidates({
-    secret: "книга", history: [{ q: "Это предмет?", a: "да" }, { q: "Это птица?", a: "нет" }],
+    secret: "книга", history: [{ q: "Это птица?", a: "нет" }, { q: "Это предмет?", a: "да" }],
     hints: [{ key: "atHome" }],
   }).map(item => item.key);
   for (const key of ["living", "canMove", "atHome", "hasWings"]) assert.equal(candidates.includes(key), false);
@@ -183,6 +204,50 @@ test("hint directions distinguish remaining words and put more even splits first
   assert.equal(keys.includes("livesInForest"), false);
   assert.equal(keys.includes("canFly"), true);
   assert.equal(keys.includes("atHome"), true);
+});
+
+test("hint topics track paraphrases and compound questions without treating them as established facts", () => {
+  for (const question of ["А оно летит по воздуху?", "Оно летает и плавает?"]) {
+    const keys = hintCandidates({ secret: "голубь", history: [{ q: question, a: "не знаю" }] }).map(item => item.key);
+    assert.equal(keys.includes("canFly"), false, question);
+    assert.equal(keys.includes("hasWings"), true, question);
+    assert.equal(keys.includes("schoolItem"), false, question);
+    assert.equal(keys.includes("canSwim"), !question.includes("плавает"), question);
+  }
+  const age = hintCandidates({ secret: "собака", history: [{ q: "Сколько ему лет?", a: "не знаю" }] });
+  assert.equal(age.some(item => item.key === "canFly"), true);
+
+  const answeredFlight = hintCandidates({
+    secret: "голубь", history: [{ q: "А оно передвигается по воздуху?", a: "да" }],
+  });
+  assert.deepEqual(answeredFlight.map(item => item.key), ["canSwim", "livesOnFarm", "atHome"]);
+
+  const turtle = hintCandidates({ secret: "черепаха", history: [{ q: "Оно живёт в воде?", a: "да" }] });
+  assert.equal(turtle.some(item => item.key === "canSwim"), true);
+  assert.equal(turtle.some(item => item.key === "schoolItem"), false);
+});
+
+test("a follow-up hint continues its predecessor until a new question changes the topic", () => {
+  const history = [{ q: "Это живое?", a: "да" }];
+  const game = { secret: "собака", history, hints: [{ key: "atHome", afterTurn: 1 }] };
+  const next = hintCandidates(game).map(item => item.key);
+  assert.equal(next.includes("handheld"), true);
+  assert.equal(next.includes("canFly"), false);
+  game.history.push({ q: "Оно умеет летать?", a: "нет" });
+  const changed = hintCandidates(game).map(item => item.key);
+  assert.equal(changed.includes("hasWings"), true);
+  assert.equal(changed.includes("handheld"), false);
+  assert.equal(changed.includes("canFly"), false);
+});
+
+test("a hint can change topics when all related directions have been asked", () => {
+  const history = [
+    "Оно плавает?", "У него есть крылья?", "У него есть лапы?", "Оно бывает дома?",
+    "Оно бывает на ферме?", "Оно бывает в лесу?", "Оно умеет летать?",
+  ].map(q => ({ q, a: "не знаю" }));
+  const keys = hintCandidates({ secret: "голубь", history }).map(item => item.key);
+  assert.equal(keys.includes("living"), true);
+  assert.equal(keys.includes("canFly"), false);
 });
 
 test("a repeated model direction cannot consume a second hint", async t => {
